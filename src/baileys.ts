@@ -204,8 +204,8 @@ export class Instance {
                     const type = Object.keys(msg.message || {})[0] || 'unknown';
 
                     // JID do usuário conectado (para detectar self-chat)
-                    const rawMyId = this.sock?.user?.id;
-                    const myJid = rawMyId ? (rawMyId!.split(':')[0].split('@')[0] + '@s.whatsapp.net') : '';
+                    const rawMyId = this.sock?.user?.id || '';
+                    const myJid = rawMyId ? (rawMyId.split(':')[0].split('@')[0] + '@s.whatsapp.net') : '';
                     const isSelfChat = from === myJid;
 
                     LogSystem.add({
