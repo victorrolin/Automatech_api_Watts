@@ -10,7 +10,10 @@ export default {
                 background: '#0a0a0b',
                 card: '#161618',
                 accent: '#10b981',
-            }
+            },
+            fontFamily: {
+                sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+            },
         },
     },
     plugins: [],

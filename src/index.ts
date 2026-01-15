@@ -1,7 +1,9 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import { InstanceManager } from './baileys.js';
+import fastifySocketIO from 'fastify-socket.io';
+import { InstanceManager, LogSystem } from './baileys.js';
 import dotenv from 'dotenv';
+import path from 'path';
 
 dotenv.config();
 
@@ -9,25 +11,62 @@ const fastify = Fastify({
     logger: true
 });
 
-// Registrar CORS
+// Registrar CORS com todos os métodos necessários
 fastify.register(cors, {
-    origin: '*', // Em produção, mude para o domínio real
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+});
+
+// Registrar Socket.io
+fastify.register(fastifySocketIO as any, {
+    cors: {
+        origin: '*',
+        methods: ['GET', 'POST']
+    }
 });
 
 const manager = new InstanceManager();
+
+// Health Check
+fastify.get('/health', async (request, reply) => {
+    return { status: 'online', timestamp: new Date().toISOString() };
+});
+
+// Listar logs
+fastify.get('/logs', async (request, reply) => {
+    return LogSystem.getLogs();
+});
 
 // Listar instâncias
 fastify.get('/instances', async (request, reply) => {
     return manager.getInstances();
 });
 
-// Criar nova instância
+// Criar instância
 fastify.post('/instances', async (request, reply) => {
     const { id } = request.body as { id: string };
-    if (!id) return reply.status(400).send({ error: 'ID da instância é obrigatório' });
+    if (!id) return reply.status(400).send({ error: 'ID é obrigatório' });
+    await manager.createInstance(id);
+    return { success: true };
+});
 
-    const instance = await manager.createInstance(id);
-    return { id: instance.id, status: instance.status };
+// Obter configurações
+fastify.get('/instances/:id/settings', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const instance = manager.getInstance(id);
+    if (!instance) return reply.status(404).send({ error: 'Instância não encontrada' });
+    return instance.settings;
+});
+
+// Salvar configurações
+fastify.post('/instances/:id/settings', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const settings = request.body as any;
+    const instance = manager.getInstance(id);
+    if (!instance) return reply.status(404).send({ error: 'Instância não encontrada' });
+    instance.saveSettings(settings);
+    return { success: true };
 });
 
 // Obter QR Code de uma instância
@@ -41,11 +80,18 @@ fastify.get('/instances/:id/qr', async (request, reply) => {
     return { qr: instance.qr };
 });
 
-// Deletar instância (Logout)
+// Deletar instância (Logout + Limpeza de Disco)
 fastify.delete('/instances/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    await manager.removeInstance(id);
-    return { success: true };
+    try {
+        await manager.removeInstance(id);
+        return { success: true };
+    } catch (e: any) {
+        return reply.status(500).send({
+            error: 'Falha ao deletar instância',
+            details: e.message
+        });
+    }
 });
 
 // Enviar mensagem via instância específica
@@ -69,8 +115,35 @@ fastify.post('/instances/:id/send', async (request, reply) => {
 
 const start = async () => {
     try {
+        await fastify.ready();
+
+        const io = (fastify as any).io;
+        if (io) {
+            console.log('[Socket.io] Servidor IO pronto');
+            LogSystem.setIO(io);
+        } else {
+            console.error('[Socket.io] OBJETO IO NÃO ENCONTRADO NO FASTIFY!');
+        }
+
         await fastify.listen({ port: 3001, host: '0.0.0.0' });
-        console.log('Automatech API rodando na porta 3001');
+        console.log(`[${new Date().toISOString()}] Automatech API rodando na porta 3001 | PID: ${process.pid} | CWD: ${process.cwd()}`);
+
+        // Carregar instâncias existentes automaticamente (depois de liberar a porta)
+        console.log('[Boot] Iniciando carregamento de instâncias...');
+        await manager.loadExistingInstances();
+
+        // Tratamento de encerramento gracioso
+        const shutdown = async (signal: string) => {
+            console.log(`\n[Server] Recebido sinal ${signal}. Encerrando...`);
+            await manager.shutdownAll();
+            await fastify.close();
+            console.log('[Server] Servidor encerrado com sucesso.');
+            process.exit(0);
+        };
+
+        process.on('SIGINT', () => shutdown('SIGINT'));
+        process.on('SIGTERM', () => shutdown('SIGTERM'));
+
     } catch (err) {
         fastify.log.error(err);
         process.exit(1);

@@ -1,20 +1,106 @@
 import React, { useState, useEffect } from 'react';
 import {
     Plus,
+    Trash2,
     Settings,
+    RefreshCw,
     MessageSquare,
     Activity,
+    Layout,
+    Bell,
+    Layers,
+    Terminal,
     LogOut,
-    QrCode,
     CheckCircle2,
-    XCircle,
-    Trash2,
-    RefreshCw
+    AlertCircle,
+    Zap
 } from 'lucide-react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
+import { io } from 'socket.io-client';
 
-const API_URL = 'http://localhost:3001';
+const API_URL = 'http://127.0.0.1:3001';
+
+const translations = {
+    en: {
+        instances: 'Instances',
+        logs: 'Real-time Logs',
+        automation: 'Automation',
+        admin_account: 'Admin Account',
+        connected_instances: 'Connected Instances',
+        terminal_activity: 'Terminal Activity',
+        automation_hub: 'Automation Hub',
+        manage_infra: 'Manage your WhatsApp infrastructure with ease.',
+        new_instance: 'New Instance',
+        id_label: 'ID',
+        config: 'Config',
+        logs_btn: 'Logs',
+        scan_qr: 'Scan QR Code',
+        qr_ready: 'QR Code Ready',
+        qr_scan_logs: 'Scanning available in server logs...',
+        activity_stream: 'Activity Stream (Last 100 entries)',
+        filtering: 'Filtering',
+        instance_settings: 'Instance Settings',
+        configuring: 'Configuring',
+        n8n_url: 'N8N URL',
+        typebot_url: 'Typebot URL',
+        bot_name: 'Bot Name',
+        api_key: 'API Key',
+        delay_ms: 'Delay (ms)',
+        session_timeout: 'Session Timeout (min)',
+        instance_status: 'Instance Status',
+        enabled: 'Enabled',
+        disabled: 'Disabled',
+        save_changes: 'Save Changes',
+        cancel: 'Cancel',
+        init_conn: 'Initialize Connection',
+        enter_id: 'Enter a unique identifier for your new WhatsApp instance.',
+        deploy: 'Deploy Instance',
+        delete_confirm: 'Do you really want to delete instance {id}?',
+        settings_saved: 'Settings saved!',
+        save_error: 'Error saving',
+        create_error: 'Error creating instance'
+    },
+    pt: {
+        instances: 'Instâncias',
+        logs: 'Logs em tempo real',
+        automation: 'Automação',
+        admin_account: 'Conta Admin',
+        connected_instances: 'Instâncias Conectadas',
+        terminal_activity: 'Atividade do Terminal',
+        automation_hub: 'Hub de Automação',
+        manage_infra: 'Gerencie sua infraestrutura do WhatsApp com facilidade.',
+        new_instance: 'Nova Instância',
+        id_label: 'ID',
+        config: 'Config',
+        logs_btn: 'Logs',
+        scan_qr: 'Escanear QR Code',
+        qr_ready: 'QR Code Pronto',
+        qr_scan_logs: 'Escaneamento disponível nos logs do servidor...',
+        activity_stream: 'Fluxo de Atividade (Últimas 100 entradas)',
+        filtering: 'Filtrando',
+        instance_settings: 'Configurações da Instância',
+        configuring: 'Configurando',
+        n8n_url: 'URL do N8N',
+        typebot_url: 'URL do Typebot',
+        bot_name: 'Nome do Bot',
+        api_key: 'Chave da API',
+        delay_ms: 'Atraso (ms)',
+        session_timeout: 'Timeout de Sessão (min)',
+        instance_status: 'Status da Instância',
+        enabled: 'Ativado',
+        disabled: 'Desativado',
+        save_changes: 'Salvar Alterações',
+        cancel: 'Cancelar',
+        init_conn: 'Iniciar Conexão',
+        enter_id: 'Digite um identificador único para sua nova instância do WhatsApp.',
+        deploy: 'Implantar Instância',
+        delete_confirm: 'Deseja realmente deletar a instância {id}?',
+        settings_saved: 'Configurações salvas!',
+        save_error: 'Erro ao salvar',
+        create_error: 'Erro ao criar instância'
+    }
+};
 
 interface Instance {
     id: string;
@@ -22,246 +108,514 @@ interface Instance {
     hasQr: boolean;
 }
 
-const App = () => {
-    const [instances, setInstances] = useState<Instance[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [showModal, setShowModal] = useState(false);
-    const [newInstanceId, setNewInstanceId] = useState('');
-    const [selectedInstanceQr, setSelectedInstanceQr] = useState<string | null>(null);
+interface LogEntry {
+    timestamp: string;
+    type: 'WHATSAPP' | 'TYPEBOT' | 'N8N' | 'SYSTEM';
+    instance: string;
+    level: 'INFO' | 'WARN' | 'ERROR';
+    message: string;
+}
 
-    const fetchInstances = async () => {
-        try {
-            const { data } = await axios.get(`${API_URL}/instances`);
-            setInstances(data);
-        } catch (error) {
-            console.error('Erro ao buscar instâncias:', error);
-        } finally {
-            setLoading(false);
-        }
+interface InstanceSettings {
+    n8nUrl?: string;
+    typebotUrl?: string;
+    typebotName?: string;
+    typebotApiKey?: string;
+    typebotDelay?: number;
+    typebotSessionTimeout?: number;
+    enabled?: boolean;
+}
+
+function App() {
+    const [instances, setInstances] = useState<Instance[]>([]);
+    const [logs, setLogs] = useState<LogEntry[]>([]);
+    const [showNewModal, setShowNewModal] = useState(false);
+    const [newInstanceId, setNewInstanceId] = useState('');
+    const [selectedInstance, setSelectedInstance] = useState<string | null>(null);
+    const [settings, setSettings] = useState<InstanceSettings>({});
+    const [activeTab, setActiveTab] = useState<'instances' | 'logs' | 'automation'>('instances');
+    const [language, setLanguage] = useState<'pt' | 'en'>(() => {
+        const saved = localStorage.getItem('app_lang');
+        return (saved === 'pt' || saved === 'en') ? saved : 'pt';
+    });
+
+    const t = translations[language];
+
+    const toggleLanguage = () => {
+        const next = language === 'pt' ? 'en' : 'pt';
+        setLanguage(next);
+        localStorage.setItem('app_lang', next);
     };
 
     useEffect(() => {
+        const socket = io(API_URL);
+
+        socket.on('new_log', (log: LogEntry) => {
+            setLogs(prev => [log, ...prev].slice(0, 100));
+        });
+
         fetchInstances();
-        const interval = setInterval(fetchInstances, 5000); // Polling simples para atualização de status
-        return () => clearInterval(interval);
+        fetchLogs();
+
+        const interval = setInterval(fetchInstances, 5000);
+        return () => {
+            clearInterval(interval);
+            socket.disconnect();
+        };
     }, []);
+
+    useEffect(() => {
+        if (selectedInstance) {
+            fetchSettings(selectedInstance);
+        }
+    }, [selectedInstance]);
+
+    const fetchInstances = async () => {
+        try {
+            const res = await axios.get(`${API_URL}/instances`);
+            setInstances(res.data);
+        } catch (e) {
+            console.error('Erro ao buscar instâncias');
+        }
+    };
+
+    const fetchLogs = async () => {
+        try {
+            const res = await axios.get(`${API_URL}/logs`);
+            setLogs(res.data);
+        } catch (e) {
+            console.error('Erro ao buscar logs');
+        }
+    };
+
+    const fetchSettings = async (id: string) => {
+        try {
+            const res = await axios.get(`${API_URL}/instances/${id}/settings`);
+            setSettings(res.data);
+        } catch (e) {
+            console.error('Erro ao buscar configurações');
+        }
+    };
 
     const createInstance = async () => {
         if (!newInstanceId) return;
         try {
             await axios.post(`${API_URL}/instances`, { id: newInstanceId });
             setNewInstanceId('');
-            setShowModal(false);
+            setShowNewModal(false);
             fetchInstances();
-        } catch (error) {
-            alert('Erro ao criar instância');
+        } catch (e) {
+            alert(t.create_error);
         }
     };
 
     const deleteInstance = async (id: string) => {
-        if (!confirm('Deseja realmente remover esta instância?')) return;
+        if (!confirm(t.delete_confirm.replace('{id}', id))) return;
         try {
             await axios.delete(`${API_URL}/instances/${id}`);
             fetchInstances();
-        } catch (error) {
-            alert('Erro ao deletar instância');
+            if (selectedInstance === id) setSelectedInstance(null);
+        } catch (e) {
+            alert(t.create_error); // Reuse generic error or add delete_error
         }
     };
 
-    const getQrCode = async (id: string) => {
+    const saveSettings = async () => {
+        if (!selectedInstance) return;
         try {
-            const { data } = await axios.get(`${API_URL}/instances/${id}/qr`);
-            setSelectedInstanceQr(data.qr);
-        } catch (error) {
-            alert('QR Code ainda não disponível');
+            await axios.post(`${API_URL}/instances/${selectedInstance}/settings`, settings);
+            alert(t.settings_saved);
+        } catch (e) {
+            alert(t.save_error);
         }
     };
 
     return (
-        <div className="flex h-screen bg-background text-white font-sans">
-            {/* Sidebar */}
-            <aside className="w-64 glass flex flex-col p-6 gap-6 border-r border-white/10">
-                <div className="flex items-center gap-3 text-accent font-bold text-xl">
-                    <div className="p-2 bg-accent/20 rounded-lg">
-                        <Activity className="w-6 h-6" />
+        <div className="flex min-h-screen">
+            {/* Sidebar Ultra-Premium */}
+            <aside className="sidebar">
+                <div className="flex items-center gap-3 mb-12 px-4">
+                    <div className="w-10 h-10 bg-gradient-to-tr from-[#00F5FF] to-[#8B5CF6] rounded-xl flex items-center justify-center shadow-lg shadow-[#00F5FF]/20">
+                        <Zap className="text-black w-6 h-6" />
                     </div>
-                    Automatech
+                    <span className="text-xl font-bold tracking-tight">Automatech</span>
                 </div>
 
-                <nav className="flex flex-col gap-2 mt-4">
-                    <button className="flex items-center gap-3 p-3 rounded-xl bg-accent text-white font-medium transition-all">
-                        <MessageSquare className="w-5 h-5" /> Instâncias
+                <nav className="flex-1">
+                    <button
+                        onClick={() => setActiveTab('instances')}
+                        className={`nav-link w-full border-none cursor-pointer ${activeTab === 'instances' ? 'active' : ''}`}
+                    >
+                        <Layers size={20} />
+                        <span>{t.instances}</span>
                     </button>
-                    <button className="flex items-center gap-3 p-3 rounded-xl text-white/60 hover:bg-white/5 transition-all">
-                        <Settings className="w-5 h-5" /> Configurações
+                    <button
+                        onClick={() => setActiveTab('logs')}
+                        className={`nav-link w-full border-none cursor-pointer ${activeTab === 'logs' ? 'active' : ''}`}
+                    >
+                        <Terminal size={20} />
+                        <span>{t.logs}</span>
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('automation')}
+                        className={`nav-link w-full border-none cursor-pointer ${activeTab === 'automation' ? 'active' : ''}`}
+                    >
+                        <Activity size={20} />
+                        <span>{t.automation}</span>
                     </button>
                 </nav>
 
-                <div className="mt-auto">
-                    <button className="flex items-center gap-3 p-3 w-full text-white/40 hover:text-red-400 transition-all">
-                        <LogOut className="w-5 h-5" /> Sair
+                <div className="px-4 mb-4">
+                    <button
+                        onClick={toggleLanguage}
+                        className="w-full glass-panel py-2 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 hover:bg-white/5 cursor-pointer border-white/5"
+                    >
+                        <RefreshCw size={14} className={language === 'en' ? 'rotate-180' : ''} />
+                        {language === 'pt' ? 'English (EN)' : 'Português (PT)'}
                     </button>
+                </div>
+
+                <div className="px-6 mb-8">
+                    <div className="glass-card p-4 rounded-2xl flex items-center gap-3 brightness-90">
+                        <div className="w-8 h-8 rounded-full bg-slate-700"></div>
+                        <div className="flex-1">
+                            <p className="text-xs font-semibold">Victor Rolin</p>
+                            <p className="text-[10px] text-slate-400">{t.admin_account}</p>
+                        </div>
+                        <LogOut size={14} className="text-slate-500 hover:text-white cursor-pointer" />
+                    </div>
                 </div>
             </aside>
 
-            {/* Main Content */}
-            <main className="flex-1 overflow-y-auto p-12">
+            {/* Main Content Area */}
+            <main className="flex-1 ml-[260px] p-10">
                 <header className="flex justify-between items-center mb-12">
                     <div>
-                        <h1 className="text-4xl font-bold mb-2">Instâncias WhatsApp</h1>
-                        <p className="text-white/40 italic">Gerencie suas conexões de forma centralizada.</p>
+                        <h1 className="text-3xl font-bold mb-2">
+                            {activeTab === 'instances' ? t.connected_instances :
+                                activeTab === 'logs' ? t.terminal_activity : t.automation_hub}
+                        </h1>
+                        <p className="text-slate-400">{t.manage_infra}</p>
                     </div>
                     <button
-                        onClick={() => setShowModal(true)}
-                        className="flex items-center gap-2 bg-accent hover:bg-accent/80 text-white px-6 py-3 rounded-2xl font-semibold transition-all shadow-lg shadow-accent/20"
+                        onClick={() => setShowNewModal(true)}
+                        className="btn-premium"
                     >
-                        <Plus className="w-5 h-5" /> Nova Instância
+                        <Plus size={20} />
+                        <span>{t.new_instance}</span>
                     </button>
                 </header>
 
-                {loading ? (
-                    <div className="flex items-center justify-center h-64">
-                        <RefreshCw className="w-8 h-8 text-accent animate-spin" />
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                        <AnimatePresence>
-                            {instances.map((inst) => (
+                <AnimatePresence mode="wait">
+                    {activeTab === 'instances' && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+                        >
+                            {instances.map(inst => (
                                 <motion.div
-                                    initial={{ opacity: 0, scale: 0.9 }}
-                                    animate={{ opacity: 1, scale: 1 }}
                                     key={inst.id}
-                                    className="glass p-6 rounded-3xl border border-white/5 card-hover transition-all flex flex-col gap-4 relative overflow-hidden group"
+                                    layoutId={inst.id}
+                                    className="glass-card p-6 rounded-2xl relative overflow-hidden group"
                                 >
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <h3 className="text-xl font-bold truncate pr-8">{inst.id}</h3>
-                                            <div className="flex items-center gap-2 mt-1">
-                                                {inst.status === 'connected' ? (
-                                                    <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full border border-emerald-400/20">
-                                                        <CheckCircle2 className="w-3 h-3" /> Online
-                                                    </div>
-                                                ) : inst.status === 'qr' ? (
-                                                    <div className="flex items-center gap-1.5 text-xs text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20">
-                                                        <QrCode className="w-3 h-3" /> Aguardando Scan
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex items-center gap-1.5 text-xs text-red-400 bg-red-400/10 px-2 py-0.5 rounded-full border border-red-400/20">
-                                                        <XCircle className="w-3 h-3" /> Offline
-                                                    </div>
-                                                )}
+                                    <div className="flex justify-between items-start mb-6">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`p-2 rounded-xl ${inst.status === 'connected' ? 'bg-emerald-500/10' : 'bg-slate-500/10'}`}>
+                                                <MessageSquare className={inst.status === 'connected' ? 'text-emerald-400' : 'text-slate-400'} size={24} />
+                                            </div>
+                                            <div>
+                                                <h3 className="font-bold text-lg">{inst.id}</h3>
+                                                <p className="text-xs text-slate-500">{t.id_label}: {inst.id.toLowerCase()}</p>
                                             </div>
                                         </div>
+                                        <div className={`status-badge ${inst.status === 'connected' ? 'status-online' : 'status-offline'}`}>
+                                            {inst.status}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-wrap gap-2">
+                                        <button
+                                            onClick={() => setSelectedInstance(inst.id)}
+                                            className="flex-1 glass-panel py-2 px-4 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 hover:bg-white/5 cursor-pointer"
+                                        >
+                                            <Settings size={14} />
+                                            {t.config}
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setSelectedInstance(inst.id);
+                                                setActiveTab('logs');
+                                            }}
+                                            className="flex-1 glass-panel py-2 px-4 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 hover:bg-white/5 cursor-pointer"
+                                        >
+                                            <Terminal size={14} />
+                                            {t.logs_btn}
+                                        </button>
                                         <button
                                             onClick={() => deleteInstance(inst.id)}
-                                            className="text-white/20 hover:text-red-500 transition-all p-2 bg-white/5 rounded-xl"
+                                            className="w-10 h-10 glass-panel flex items-center justify-center text-rose-400 hover:bg-rose-500/10 cursor-pointer"
                                         >
-                                            <Trash2 className="w-5 h-5" />
+                                            <Trash2 size={16} />
                                         </button>
+
+                                        {inst.status === 'qr' && (
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedInstance(inst.id);
+                                                    setActiveTab('logs');
+                                                }}
+                                                className="w-full glass-panel py-2 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 bg-cyan-500/10 text-cyan-400 border-cyan-500/30 hover:bg-cyan-500/20 cursor-pointer mt-1"
+                                            >
+                                                <Zap size={14} className="animate-pulse" />
+                                                {t.scan_qr}
+                                            </button>
+                                        )}
                                     </div>
 
-                                    <div className="flex gap-2 mt-2">
-                                        <img src="https://typebot.io/favicon.ico" className="w-5 h-5 opacity-40 grayscale group-hover:grayscale-0 transition-all" title="Typebot" />
-                                        <img src="https://n8n.io/favicon.ico" className="w-5 h-5 opacity-40 grayscale group-hover:grayscale-0 transition-all" title="n8n" />
-                                    </div>
-
-                                    {inst.status !== 'connected' && (
-                                        <button
-                                            onClick={() => getQrCode(inst.id)}
-                                            className="mt-4 w-full py-3 rounded-2xl bg-white/5 hover:bg-white/10 font-semibold transition-all border border-white/5"
-                                        >
-                                            Conectar WhatsApp
-                                        </button>
+                                    {inst.status === 'qr' && (
+                                        <div className="mt-4 p-4 bg-white/5 rounded-xl text-center">
+                                            <p className="text-xs text-cyan-400 font-semibold mb-2 flex items-center justify-center gap-2">
+                                                <RefreshCw size={12} className="animate-spin" />
+                                                {t.qr_ready}
+                                            </p>
+                                            <p className="text-[10px] text-slate-500">{t.qr_scan_logs}</p>
+                                        </div>
                                     )}
                                 </motion.div>
                             ))}
-                        </AnimatePresence>
-                    </div>
-                )}
-            </main>
+                        </motion.div>
+                    )}
 
-            {/* Modal Nova Instância */}
-            <AnimatePresence>
-                {showModal && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+                    {activeTab === 'logs' && (
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            onClick={() => setShowModal(false)}
-                            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-                        />
-                        <motion.div
-                            initial={{ scale: 0.9, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0.9, opacity: 0 }}
-                            className="glass p-8 rounded-[2rem] w-full max-w-md relative z-10 border border-white/20"
+                            className="glass-panel p-6 rounded-3xl min-h-[600px] border-white/5"
                         >
-                            <h2 className="text-2xl font-bold mb-6">Criar Nova Instância</h2>
-                            <div className="flex flex-col gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-white/40 mb-2">Nome da Instância</label>
-                                    <input
-                                        autoFocus
-                                        value={newInstanceId}
-                                        onChange={(e) => setNewInstanceId(e.target.value)}
-                                        placeholder="Ex: Suporte-Vendas"
-                                        className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 focus:border-accent outline-none transition-all"
-                                    />
+                            <div className="flex items-center justify-between mb-6">
+                                <div className="flex items-center gap-2 text-slate-400">
+                                    <Terminal size={18} />
+                                    <span className="text-sm font-medium">{t.activity_stream}</span>
                                 </div>
-                                <button
-                                    onClick={createInstance}
-                                    className="w-full bg-accent text-white py-4 rounded-2xl font-bold text-lg hover:bg-accent/80 transition-all mt-4"
-                                >
-                                    Inicializar Instância
-                                </button>
+                                {selectedInstance && (
+                                    <div className="flex items-center gap-2 bg-cyan-500/10 text-cyan-400 py-1.5 px-3 rounded-lg border border-cyan-500/20 text-xs font-semibold">
+                                        {t.filtering}: {selectedInstance}
+                                        <button
+                                            onClick={() => setSelectedInstance(null)}
+                                            className="ml-1 opacity-60 hover:opacity-100 cursor-pointer"
+                                        >
+                                            <Plus size={14} className="rotate-45" />
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="space-y-2 font-mono text-xs overflow-y-auto max-h-[600px] pr-4 custom-scrollbar">
+                                {logs
+                                    .filter(log => !selectedInstance || log.instance === selectedInstance)
+                                    .map((log, i) => (
+                                        <div key={i} className="flex gap-4 p-2 rounded hover:bg-white/5 transition-colors border-l-2 border-transparent hover:border-cyan-500/50">
+                                            <span className="text-slate-600 shrink-0">{new Date(log.timestamp).toLocaleTimeString()}</span>
+                                            <span className={`font-bold shrink-0 w-20 ${log.type === 'WHATSAPP' ? 'text-emerald-400' :
+                                                log.type === 'TYPEBOT' ? 'text-purple-400' :
+                                                    log.type === 'N8N' ? 'text-amber-400' : 'text-blue-400'
+                                                }`}>
+                                                [{log.type}]
+                                            </span>
+                                            <span className={`shrink-0 w-24 font-semibold ${log.level === 'ERROR' ? 'text-rose-400' :
+                                                log.level === 'WARN' ? 'text-amber-400' : 'text-slate-400'
+                                                }`}>
+                                                {log.level}
+                                            </span>
+                                            <span className="text-slate-300 break-all">{log.message}</span>
+                                            <span className="ml-auto text-slate-600 text-[10px]">#{log.instance}</span>
+                                        </div>
+                                    ))}
                             </div>
                         </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
+                    )}
+                </AnimatePresence>
 
-            {/* QR Code Viewer */}
-            <AnimatePresence>
-                {selectedInstanceQr && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            onClick={() => setSelectedInstanceQr(null)}
-                            className="absolute inset-0 bg-black/90 backdrop-blur-md"
-                        />
-                        <motion.div
-                            initial={{ scale: 0.9, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0.9, opacity: 0 }}
-                            className="bg-white p-12 rounded-[3rem] relative z-10 flex flex-col items-center gap-6"
-                        >
-                            <h2 className="text-black text-2xl font-bold">Escaneie o QR Code</h2>
-                            <div className="bg-white p-2 rounded-2xl border-4 border-gray-100 shadow-2xl">
-                                {/* Aqui seria um componente de QR Code real, usando placeholder para demo */}
-                                <img
-                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(selectedInstanceQr)}`}
-                                    alt="WhatsApp QR Code"
-                                    className="w-64 h-64"
-                                />
-                            </div>
-                            <p className="text-black/40 text-sm max-w-[250px] text-center">
-                                Abra o WhatsApp no seu celular e vá em Dispositivos Conectados.
-                            </p>
-                            <button
-                                onClick={() => setSelectedInstanceQr(null)}
-                                className="mt-4 text-accent font-bold text-lg"
+                {/* Settings Panel (Modal-like) */}
+                <AnimatePresence>
+                    {selectedInstance && (
+                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.95 }}
+                                className="glass-panel p-8 rounded-[32px] w-full max-w-2xl shadow-2xl overflow-hidden relative"
                             >
-                                Concluído
-                            </button>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
+                                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan-500 to-transparent opacity-50"></div>
+                                <div className="flex justify-between items-center mb-8">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center">
+                                            <Settings className="text-white" size={24} />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-2xl font-bold">{t.instance_settings}</h2>
+                                            <p className="text-sm text-slate-400">{t.configuring}: {selectedInstance}</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => setSelectedInstance(null)}
+                                        className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/5 rounded-xl cursor-pointer"
+                                    >
+                                        <Plus size={24} className="rotate-45" />
+                                    </button>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-6 mb-8">
+                                    <div className="space-y-4">
+                                        <label className="block">
+                                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">{t.n8n_url}</span>
+                                            <input
+                                                type="text"
+                                                className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-sm focus:border-cyan-500/50 outline-none transition-all"
+                                                value={settings.n8nUrl || ''}
+                                                onChange={e => setSettings({ ...settings, n8nUrl: e.target.value })}
+                                                placeholder="https://n8n.yourdomain.com/webhook..."
+                                            />
+                                        </label>
+                                        <label className="block">
+                                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">{t.typebot_url}</span>
+                                            <input
+                                                type="text"
+                                                className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-sm focus:border-cyan-500/50 outline-none transition-all"
+                                                value={settings.typebotUrl || ''}
+                                                onChange={e => setSettings({ ...settings, typebotUrl: e.target.value })}
+                                                placeholder="https://typebot.yourdomain.com"
+                                            />
+                                        </label>
+                                        <label className="block">
+                                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">{t.bot_name}</span>
+                                            <input
+                                                type="text"
+                                                className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-sm focus:border-cyan-500/50 outline-none transition-all"
+                                                value={settings.typebotName || ''}
+                                                onChange={e => setSettings({ ...settings, typebotName: e.target.value })}
+                                                placeholder="my-personal-bot"
+                                            />
+                                        </label>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <label className="block">
+                                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">{t.api_key}</span>
+                                            <input
+                                                type="password"
+                                                className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-sm focus:border-cyan-500/50 outline-none transition-all"
+                                                value={settings.typebotApiKey || ''}
+                                                onChange={e => setSettings({ ...settings, typebotApiKey: e.target.value })}
+                                                placeholder="Bearer your-token..."
+                                            />
+                                        </label>
+                                        <div className="flex gap-4">
+                                            <label className="flex-1">
+                                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">{t.delay_ms}</span>
+                                                <input
+                                                    type="number"
+                                                    className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-sm focus:border-cyan-500/50 outline-none transition-all"
+                                                    value={settings.typebotDelay || 1000}
+                                                    onChange={e => setSettings({ ...settings, typebotDelay: parseInt(e.target.value) })}
+                                                />
+                                            </label>
+                                            <label className="flex-1">
+                                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">{t.session_timeout}</span>
+                                                <input
+                                                    type="number"
+                                                    className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-sm focus:border-cyan-500/50 outline-none transition-all"
+                                                    value={settings.typebotSessionTimeout || 30}
+                                                    onChange={e => setSettings({ ...settings, typebotSessionTimeout: parseInt(e.target.value) })}
+                                                    placeholder="30"
+                                                />
+                                            </label>
+                                        </div>
+                                        <div className="flex gap-4">
+                                            <label className="flex-1">
+                                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">{t.instance_status}</span>
+                                                <button
+                                                    onClick={() => setSettings({ ...settings, enabled: settings.enabled === false ? true : false })}
+                                                    className={`w-full h-[47px] rounded-xl flex items-center justify-center gap-2 border transition-all cursor-pointer ${settings.enabled !== false ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                                                        }`}
+                                                >
+                                                    {settings.enabled !== false ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                                                    {settings.enabled !== false ? t.enabled : t.disabled}
+                                                </button>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={saveSettings}
+                                        className="btn-premium flex-1 justify-center"
+                                    >
+                                        {t.save_changes}
+                                    </button>
+                                    <button
+                                        onClick={() => setSelectedInstance(null)}
+                                        className="px-6 rounded-xl border border-white/10 hover:bg-white/5 transition-all cursor-pointer"
+                                    >
+                                        {t.cancel}
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
+
+                {/* New Instance Modal */}
+                <AnimatePresence>
+                    {showNewModal && (
+                        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center p-6">
+                            <motion.div
+                                initial={{ opacity: 0, y: 50 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: 50 }}
+                                className="glass-panel p-10 rounded-[40px] w-full max-w-lg text-center relative overflow-hidden"
+                            >
+                                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500 to-purple-500"></div>
+                                <div className="w-20 h-20 bg-gradient-to-tr from-cyan-500 to-purple-500 rounded-3xl mx-auto mb-8 flex items-center justify-center shadow-2xl shadow-cyan-500/20">
+                                    <Zap className="text-black w-10 h-10" />
+                                </div>
+                                <h2 className="text-3xl font-bold mb-4">{t.init_conn}</h2>
+                                <p className="text-slate-400 mb-8">{t.enter_id}</p>
+
+                                <div className="space-y-6">
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-center text-xl font-semibold focus:border-cyan-500/50 outline-none transition-all"
+                                            placeholder="Ex: Marketing_01"
+                                            value={newInstanceId}
+                                            onChange={e => setNewInstanceId(e.target.value)}
+                                            autoFocus
+                                        />
+                                    </div>
+                                    <div className="flex gap-4">
+                                        <button
+                                            onClick={createInstance}
+                                            className="btn-premium flex-1 h-14 justify-center"
+                                        >
+                                            {t.deploy}
+                                        </button>
+                                        <button
+                                            onClick={() => setShowNewModal(false)}
+                                            className="px-8 rounded-2xl border border-white/10 hover:bg-white/5 transition-all cursor-pointer"
+                                        >
+                                            {t.cancel}
+                                        </button>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
+            </main>
         </div>
     );
-};
+}
 
 export default App;

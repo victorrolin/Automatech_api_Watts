@@ -6,3 +6,7 @@ auth_info_baileys/
 dashboard/node_modules/
 dashboard/dist/
 .DS_Store
+*.log
+error.log
+*.map
+dashboard/build/

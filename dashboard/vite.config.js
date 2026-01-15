@@ -4,6 +4,13 @@ export default defineConfig({
     plugins: [react()],
     server: {
         port: 3000,
+        host: true,
+        strictPort: true,
+        hmr: {
+            protocol: 'ws',
+            host: 'localhost',
+            port: 3000
+        }
     }
 });
 //# sourceMappingURL=vite.config.js.map
