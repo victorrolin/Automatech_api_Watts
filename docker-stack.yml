@@ -22,12 +22,12 @@ services:
         - traefik.constraint-label=traefik-public
         
         # HTTP Router
-        - traefik.http.routers.automatech-api.rule=Host(`api.automatech.tech`)
+        - traefik.http.routers.automatech-api.rule=Host(`api.wattsapi.automatech.tech`)
         - traefik.http.routers.automatech-api.entrypoints=http
         - traefik.http.routers.automatech-api.middlewares=https-redirect
         
         # HTTPS Router
-        - traefik.http.routers.automatech-api-secure.rule=Host(`api.automatech.tech`)
+        - traefik.http.routers.automatech-api-secure.rule=Host(`api.wattsapi.automatech.tech`)
         - traefik.http.routers.automatech-api-secure.entrypoints=https
         - traefik.http.routers.automatech-api-secure.tls=true
         - traefik.http.routers.automatech-api-secure.tls.certresolver=le
@@ -58,12 +58,12 @@ services:
         - traefik.constraint-label=traefik-public
         
         # HTTP Router
-        - traefik.http.routers.automatech-dashboard.rule=Host(`automatech.automatech.tech`)
+        - traefik.http.routers.automatech-dashboard.rule=Host(`wattsapi.automatech.tech`)
         - traefik.http.routers.automatech-dashboard.entrypoints=http
         - traefik.http.routers.automatech-dashboard.middlewares=https-redirect
         
         # HTTPS Router
-        - traefik.http.routers.automatech-dashboard-secure.rule=Host(`automatech.automatech.tech`)
+        - traefik.http.routers.automatech-dashboard-secure.rule=Host(`wattsapi.automatech.tech`)
         - traefik.http.routers.automatech-dashboard-secure.entrypoints=https
         - traefik.http.routers.automatech-dashboard-secure.tls=true
         - traefik.http.routers.automatech-dashboard-secure.tls.certresolver=le
