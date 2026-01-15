@@ -4,8 +4,9 @@ FROM node:20-alpine AS api-builder
 WORKDIR /app
 
 # Copiar package.json e instalar dependências
+# Copiar package.json e instalar dependências
 COPY package*.json ./
-RUN npm ci --only=production --legacy-peer-deps
+RUN npm ci --legacy-peer-deps
 
 # Copiar código fonte
 COPY src ./src
@@ -19,10 +20,12 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Copiar dependências e build
-COPY --from=api-builder /app/node_modules ./node_modules
+# Instalar dependências de produção
+COPY package*.json ./
+RUN npm ci --only=production --legacy-peer-deps
+
+# Copiar build
 COPY --from=api-builder /app/dist ./dist
-COPY --from=api-builder /app/package*.json ./
 
 # Criar diretório de sessões
 RUN mkdir -p sessions
