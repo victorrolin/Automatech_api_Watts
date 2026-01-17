@@ -94,6 +94,32 @@ fastify.delete('/instances/:id', async (request, reply) => {
     }
 });
 
+// Reset de instância (Força logout e regeneração de QR Code)
+fastify.post('/instances/:id/reset', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+        const instance = manager.getInstance(id);
+        if (!instance) return reply.status(404).send({ error: 'Instância não encontrada' });
+
+        // Fazer logout para limpar credenciais
+        await instance.logout();
+
+        // Aguardar um pouco para garantir limpeza
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Reinicializar a instância
+        await instance.init();
+
+        return { success: true, message: 'Instância resetada. QR Code será gerado em breve.' };
+    } catch (e: any) {
+        return reply.status(500).send({
+            error: 'Falha ao resetar instância',
+            details: e.message
+        });
+    }
+});
+
+
 // Enviar mensagem via instância específica
 fastify.post('/instances/:id/send', async (request, reply) => {
     const { id } = request.params as { id: string };
