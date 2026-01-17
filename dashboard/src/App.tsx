@@ -239,6 +239,9 @@ function App() {
     const [metrics, setMetrics] = useState<AllMetrics>({});
     const [usersIAM, setUsersIAM] = useState<UserIAM[]>([]);
     const [showUserModal, setShowUserModal] = useState(false);
+
+    // Lista de administradores em sincronia com o backend
+    const isAdmin = user?.email && ['victor@gmail.com', 'victorrolin@gmail.com'].includes(user.email);
     const [language, setLanguage] = useState<'pt' | 'en'>(() => {
         const saved = localStorage.getItem('app_lang');
         return (saved === 'pt' || saved === 'en') ? saved : 'pt';
@@ -452,8 +455,10 @@ function App() {
             setLoginEmail('');
             setLoginPassword('');
             fetchUsers();
-        } catch (e) {
-            alert('Erro ao criar usuário');
+            alert('Usuário criado com sucesso!');
+        } catch (e: any) {
+            const errorMsg = e.response?.data?.error || 'Erro ao criar usuário';
+            alert(errorMsg);
         }
     };
 
@@ -572,13 +577,15 @@ function App() {
                         <Activity size={20} />
                         <span>{t.automation}</span>
                     </button>
-                    <button
-                        onClick={() => setActiveTab('users')}
-                        className={`nav-link w-full border-none cursor-pointer ${activeTab === 'users' ? 'active' : ''}`}
-                    >
-                        <Users size={20} />
-                        <span>Usuários</span>
-                    </button>
+                    {isAdmin && (
+                        <button
+                            onClick={() => setActiveTab('users')}
+                            className={`nav-link w-full border-none cursor-pointer ${activeTab === 'users' ? 'active' : ''}`}
+                        >
+                            <Users size={20} />
+                            <span>Usuários</span>
+                        </button>
+                    )}
                 </nav>
 
                 <div className="pt-6 border-t border-white/5 px-4 shrink-0">
@@ -588,7 +595,7 @@ function App() {
                         </div>
                         <div className="flex-1 min-w-0">
                             <p className="text-xs font-bold truncate">{user?.email}</p>
-                            <p className="text-[10px] text-slate-500">Administrator</p>
+                            <p className="text-[10px] text-slate-500">{isAdmin ? 'Administrator' : 'Operator'}</p>
                         </div>
                     </div>
                     <button

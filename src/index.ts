@@ -31,6 +31,8 @@ fastify.register(fastifySocketIO as any, {
 
 const manager = new InstanceManager();
 
+const ADMIN_EMAILS = ['victor@gmail.com', 'victorrolin@gmail.com']; // Lista de administradores
+
 // Middleware de Autenticação Global
 fastify.addHook('preHandler', async (request, reply) => {
     // Pular autenticação para o health check
@@ -186,27 +188,53 @@ fastify.get('/instances/:id/metrics', async (request, reply) => {
 
 // --- Rotas Administrativas de Usuários (IAM) ---
 
-// Listar todos os usuários
+// Listar todos os usuários (Apenas Admin)
 fastify.get('/users', async (request, reply) => {
+    const user = (request as any).user;
+    if (!ADMIN_EMAILS.includes(user.email)) {
+        return reply.status(403).send({ error: 'Acesso negado: Apenas administradores podem gerenciar usuários' });
+    }
+
     const { data, error } = await supabase.auth.admin.listUsers();
     if (error) return reply.status(500).send({ error: error.message });
     return data.users;
 });
 
-// Criar novo usuário
+// Criar novo usuário (Apenas Admin)
 fastify.post('/users', async (request, reply) => {
+    const user = (request as any).user;
+    if (!ADMIN_EMAILS.includes(user.email)) {
+        return reply.status(403).send({ error: 'Acesso negado' });
+    }
+
     const { email, password } = request.body as any;
+
+    // Validar senha mínima para o Supabase
+    if (!password || password.length < 6) {
+        return reply.status(400).send({ error: 'A senha deve ter pelo menos 6 caracteres' });
+    }
+
     const { data, error } = await supabase.auth.admin.createUser({
         email,
         password,
         email_confirm: true
     });
-    if (error) return reply.status(400).send({ error: error.message });
+
+    if (error) {
+        console.error('[IAM] Erro ao criar usuário:', error.message);
+        return reply.status(400).send({ error: error.message });
+    }
+
     return { success: true, user: data.user };
 });
 
-// Atualizar usuário (ex: trocar senha ou banir)
+// Atualizar usuário (ex: trocar senha ou banir) (Apenas Admin)
 fastify.patch('/users/:id', async (request, reply) => {
+    const user = (request as any).user;
+    if (!ADMIN_EMAILS.includes(user.email)) {
+        return reply.status(403).send({ error: 'Acesso negado' });
+    }
+
     const { id } = request.params as { id: string };
     const updates = request.body as any;
 
@@ -215,8 +243,13 @@ fastify.patch('/users/:id', async (request, reply) => {
     return { success: true, user: data.user };
 });
 
-// Deletar usuário
+// Deletar usuário (Apenas Admin)
 fastify.delete('/users/:id', async (request, reply) => {
+    const user = (request as any).user;
+    if (!ADMIN_EMAILS.includes(user.email)) {
+        return reply.status(403).send({ error: 'Acesso negado' });
+    }
+
     const { id } = request.params as { id: string };
     const { error } = await supabase.auth.admin.deleteUser(id);
     if (error) return reply.status(400).send({ error: error.message });
