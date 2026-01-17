@@ -20,8 +20,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { io } from 'socket.io-client';
 
 
+
 // Detectar automaticamente a URL da API
-const API_URL = import.meta.env.VITE_API_URL ||
+const API_URL: string = import.meta.env.VITE_API_URL as string ||
     (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
         ? 'http://127.0.0.1:3001'
         : `${window.location.protocol}//api.${window.location.hostname.replace('www.', '')}`);
