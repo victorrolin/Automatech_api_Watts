@@ -20,26 +20,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { io } from 'socket.io-client';
 
 const getApiUrl = (): string => {
-    // 1. Prioridade para variável de ambiente fixada no build
-    if (typeof import.meta.env.VITE_API_URL === 'string' && import.meta.env.VITE_API_URL.length > 0) {
-        return import.meta.env.VITE_API_URL;
-    }
-
-    // 2. Detecção automática baseada no domínio atual
-    const { hostname, protocol } = window.location;
+    const { hostname } = window.location;
 
     // Se for localhost (desenvolvimento)
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
         return 'http://127.0.0.1:3001';
     }
 
-    // Se estiver no domínio de produção
-    if (hostname.includes('automatech.tech')) {
-        return 'https://api.wattsapi.automatech.tech';
-    }
-
-    // Fallback generico (ex: ip direto)
-    return `${protocol}//api.${hostname}`;
+    // Em qualquer outro caso (produção), usa o domínio correto com HTTPS
+    return 'https://api.wattsapi.automatech.tech';
 };
 
 const API_URL = getApiUrl();
