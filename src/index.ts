@@ -317,8 +317,8 @@ const start = async () => {
             console.error('[Socket.io] OBJETO IO NÃO ENCONTRADO NO FASTIFY!');
         }
 
-        await fastify.listen({ port: 3001, host: '0.0.0.0' });
-        console.log(`[${new Date().toISOString()}] Automatech API rodando na porta 3001 | PID: ${process.pid} | CWD: ${process.cwd()}`);
+        await fastify.listen({ port: 8080, host: '0.0.0.0' });
+        console.log(`[${new Date().toISOString()}] Automatech API rodando na porta 8080 | PID: ${process.pid} | CWD: ${process.cwd()}`);
 
         // Carregar instâncias existentes automaticamente (depois de liberar a porta)
         console.log('[Boot] Iniciando carregamento de instâncias...');
