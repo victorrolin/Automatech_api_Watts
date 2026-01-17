@@ -24,8 +24,9 @@ import { io } from 'socket.io-client';
 // Detectar automaticamente a URL da API
 const getApiUrl = (): string => {
     // Se houver variável de ambiente, usar ela
-    if (import.meta.env.VITE_API_URL) {
-        return import.meta.env.VITE_API_URL;
+    const envUrl = import.meta.env.VITE_API_URL;
+    if (envUrl && typeof envUrl === 'string') {
+        return envUrl;
     }
 
     // Se for localhost, usar API local
