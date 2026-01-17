@@ -662,7 +662,7 @@ function App() {
                                 <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6">
                                     <div className="bg-white p-4 rounded-xl mx-auto w-fit">
                                         <img
-                                            src={`${API_URL}/instance/${qrInstanceId}/qr`}
+                                            src={`${API_URL}/instances/${qrInstanceId}/qr`}
                                             alt="QR Code"
                                             className="w-64 h-64"
                                             onError={(e) => {
@@ -676,8 +676,9 @@ function App() {
                                     <button
                                         onClick={() => {
                                             // Recarregar QR Code
-                                            const img = document.querySelector(`img[src="${API_URL}/instance/${qrInstanceId}/qr"]`) as HTMLImageElement;
-                                            if (img) img.src = `${API_URL}/instance/${qrInstanceId}/qr?t=${Date.now()}`;
+                                            const img = document.querySelector(`img[src^="${API_URL}/instances/${qrInstanceId}/qr"]`) as HTMLImageElement;
+                                            if (img) img.src = `${API_URL}/instances/${qrInstanceId}/qr?t=${Date.now()}`;
+
                                         }}
                                         className="flex-1 glass-panel py-3 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 hover:bg-white/5 cursor-pointer"
                                     >
