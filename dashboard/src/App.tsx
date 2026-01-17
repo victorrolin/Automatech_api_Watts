@@ -19,27 +19,7 @@ import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { io } from 'socket.io-client';
 
-
-
-// Detectar automaticamente a URL da API
-const getApiUrl = (): string => {
-    // Se houver variável de ambiente, usar ela
-    const envUrl = import.meta.env.VITE_API_URL;
-    if (envUrl && typeof envUrl === 'string') {
-        return envUrl;
-    }
-
-    // Se for localhost, usar API local
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        return 'http://127.0.0.1:3001';
-    }
-
-    // Em produção, construir URL baseada no domínio atual
-    const hostname = window.location.hostname.replace('www.', '');
-    return `${window.location.protocol}//api.${hostname}`;
-};
-
-const API_URL = getApiUrl();
+const API_URL = 'http://127.0.0.1:3001';
 
 const translations = {
     en: {
@@ -658,7 +638,7 @@ function App() {
                                 <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6">
                                     <div className="bg-white p-4 rounded-xl mx-auto w-fit">
                                         <img
-                                            src={`${API_URL}/instances/${qrInstanceId}/qr`}
+                                            src={`${API_URL}/instance/${qrInstanceId}/qr`}
                                             alt="QR Code"
                                             className="w-64 h-64"
                                             onError={(e) => {
@@ -672,8 +652,8 @@ function App() {
                                     <button
                                         onClick={() => {
                                             // Recarregar QR Code
-                                            const img = document.querySelector(`img[src^="${API_URL}/instances/${qrInstanceId}/qr"]`) as HTMLImageElement;
-                                            if (img) img.src = `${API_URL}/instances/${qrInstanceId}/qr?t=${Date.now()}`;
+                                            const img = document.querySelector(`img[src="${API_URL}/instance/${qrInstanceId}/qr"]`) as HTMLImageElement;
+                                            if (img) img.src = `${API_URL}/instance/${qrInstanceId}/qr?t=${Date.now()}`;
                                         }}
                                         className="flex-1 glass-panel py-3 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 hover:bg-white/5 cursor-pointer"
                                     >
