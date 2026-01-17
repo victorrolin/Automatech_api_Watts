@@ -241,7 +241,7 @@ function App() {
     const [showUserModal, setShowUserModal] = useState(false);
 
     // Lista de administradores em sincronia com o backend
-    const isAdmin = user?.email && ['victor@gmail.com', 'victorrolin@gmail.com'].includes(user.email);
+    const isAdmin = (user as any)?.role === 'admin';
     const [language, setLanguage] = useState<'pt' | 'en'>(() => {
         const saved = localStorage.getItem('app_lang');
         return (saved === 'pt' || saved === 'en') ? saved : 'pt';
@@ -255,30 +255,23 @@ function App() {
         localStorage.setItem('app_lang', next);
     };
 
-    // Supabase Auth Effect
+    // Custom Auth Effect (Manual Session)
     useEffect(() => {
-        // Check current session
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setUser(session?.user ?? null);
-            setLoading(false);
+        const savedToken = localStorage.getItem('app_token');
+        const savedUser = localStorage.getItem('app_user');
 
-            if (session) {
-                setupAxiosInterceptor(session.access_token);
-            }
-        });
+        if (savedToken && savedUser) {
+            const parsedUser = JSON.parse(savedUser);
+            setUser(parsedUser);
+            setupAxiosInterceptor(savedToken);
+        }
 
-        // Listen for changes
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            setUser(session?.user ?? null);
-            if (session) {
-                setupAxiosInterceptor(session.access_token);
-            }
-        });
-
-        return () => subscription.unsubscribe();
+        setLoading(false);
     }, []);
 
     const setupAxiosInterceptor = (token: string) => {
+        // Remover interceptores antigos para não duplicar
+        axios.interceptors.request.clear();
         axios.interceptors.request.use((config) => {
             config.headers.Authorization = `Bearer ${token}`;
             return config;
@@ -288,16 +281,27 @@ function App() {
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoginError('');
-        const { error } = await supabase.auth.signInWithPassword({
-            email: loginEmail,
-            password: loginPassword,
-        });
-        if (error) setLoginError(t.invalid_login);
+        try {
+            const res = await axios.post(`${API_URL}/login`, {
+                email: loginEmail,
+                password: loginPassword
+            });
+
+            const { user, token } = res.data;
+            localStorage.setItem('app_token', token);
+            localStorage.setItem('app_user', JSON.stringify(user));
+
+            setUser(user);
+            setupAxiosInterceptor(token);
+        } catch (e: any) {
+            setLoginError(e.response?.data?.error || t.invalid_login);
+        }
     };
 
     const handleLogout = async () => {
-        await supabase.auth.signOut();
-        window.location.reload(); // Reset state
+        localStorage.removeItem('app_token');
+        localStorage.removeItem('app_user');
+        window.location.reload();
     };
 
     useEffect(() => {

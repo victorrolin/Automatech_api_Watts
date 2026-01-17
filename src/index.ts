@@ -33,10 +33,10 @@ const manager = new InstanceManager();
 
 const ADMIN_EMAILS = ['victor@gmail.com', 'victorrolin@gmail.com']; // Lista de administradores
 
-// Middleware de Autenticação Global
+// Middleware de Autenticação Global (Agora via Tabela dashboard_users)
 fastify.addHook('preHandler', async (request, reply) => {
-    // Pular autenticação para o health check
-    if (request.url === '/health') return;
+    // Pular autenticação para o health check e login
+    if (request.url === '/health' || request.url === '/login') return;
 
     const authHeader = request.headers.authorization;
     if (!authHeader) {
@@ -44,13 +44,22 @@ fastify.addHook('preHandler', async (request, reply) => {
     }
 
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error } = await supabase.auth.getUser(token);
+
+    // Verificamos o token na nossa tabela (o token será o email para simplificar ou um payload)
+    const { data: user, error } = await supabase
+        .from('dashboard_users')
+        .select('*')
+        .eq('email', token) // Usando email como token simples para evitar complexidade de JWT agora
+        .single();
 
     if (error || !user) {
-        return reply.status(401).send({ error: 'Não autorizado ou token expirado' });
+        return reply.status(401).send({ error: 'Sessão inválida ou usuário bloqueado' });
     }
 
-    // Anexar usuário ao request se necessário (opcional)
+    if (user.banned) {
+        return reply.status(403).send({ error: 'Sua conta está bloqueada' });
+    }
+
     (request as any).user = user;
 });
 
@@ -186,72 +195,112 @@ fastify.get('/instances/:id/metrics', async (request, reply) => {
     return reply.send(MetricsManager.get(id));
 });
 
+// --- Rota de Login Simplificada ---
+fastify.post('/login', async (request, reply) => {
+    const { email, password } = request.body as any;
+
+    const { data: user, error } = await supabase
+        .from('dashboard_users')
+        .select('*')
+        .eq('email', email)
+        .eq('password', password) // Comparação direta conforme solicitado
+        .single();
+
+    if (error || !user) {
+        return reply.status(401).send({ error: 'E-mail ou senha incorretos' });
+    }
+
+    if (user.banned) {
+        return reply.status(403).send({ error: 'Sua conta está suspensa' });
+    }
+
+    return {
+        success: true,
+        user: {
+            email: user.email,
+            role: user.role
+        },
+        token: user.email // O email servirá como token de sessão
+    };
+});
+
 // --- Rotas Administrativas de Usuários (IAM) ---
 
 // Listar todos os usuários (Apenas Admin)
 fastify.get('/users', async (request, reply) => {
-    const user = (request as any).user;
-    if (!ADMIN_EMAILS.includes(user.email)) {
+    const currentUser = (request as any).user;
+    if (currentUser.role !== 'admin') {
         return reply.status(403).send({ error: 'Acesso negado: Apenas administradores podem gerenciar usuários' });
     }
 
-    const { data, error } = await supabase.auth.admin.listUsers();
+    const { data, error } = await supabase.from('dashboard_users').select('*');
     if (error) return reply.status(500).send({ error: error.message });
-    return data.users;
+    return data;
 });
 
 // Criar novo usuário (Apenas Admin)
 fastify.post('/users', async (request, reply) => {
-    const user = (request as any).user;
-    if (!ADMIN_EMAILS.includes(user.email)) {
+    const currentUser = (request as any).user;
+    if (currentUser.role !== 'admin') {
         return reply.status(403).send({ error: 'Acesso negado' });
     }
 
-    const { email, password } = request.body as any;
+    const { email, password, role = 'operator' } = request.body as any;
 
-    // Validar senha mínima para o Supabase
-    if (!password || password.length < 6) {
-        return reply.status(400).send({ error: 'A senha deve ter pelo menos 6 caracteres' });
+    if (!password || password.length < 4) {
+        return reply.status(400).send({ error: 'A senha deve ter pelo menos 4 caracteres' });
     }
 
-    const { data, error } = await supabase.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true
-    });
+    const { data, error } = await supabase
+        .from('dashboard_users')
+        .insert([{ email, password, role }])
+        .select()
+        .single();
 
     if (error) {
-        console.error('[IAM] Erro ao criar usuário:', error.message);
+        if (error.code === '23505') return reply.status(400).send({ error: 'E-mail já cadastrado' });
         return reply.status(400).send({ error: error.message });
     }
 
-    return { success: true, user: data.user };
+    return { success: true, user: data };
 });
 
-// Atualizar usuário (ex: trocar senha ou banir) (Apenas Admin)
+// Atualizar usuário (bloquear/desbloquear)
 fastify.patch('/users/:id', async (request, reply) => {
-    const user = (request as any).user;
-    if (!ADMIN_EMAILS.includes(user.email)) {
+    const currentUser = (request as any).user;
+    if (currentUser.role !== 'admin') {
         return reply.status(403).send({ error: 'Acesso negado' });
     }
 
     const { id } = request.params as { id: string };
-    const updates = request.body as any;
+    const { banned_until, ...updates } = request.body as any;
 
-    const { data, error } = await supabase.auth.admin.updateUserById(id, updates);
+    // Converter o payload antigo para o novo formato de tabela
+    const finalUpdates: any = { ...updates };
+    if (banned_until !== undefined) {
+        finalUpdates.banned = banned_until !== 'none';
+    }
+
+    const { data, error } = await supabase
+        .from('dashboard_users')
+        .update(finalUpdates)
+        .eq('id', id)
+        .select()
+        .single();
+
     if (error) return reply.status(400).send({ error: error.message });
-    return { success: true, user: data.user };
+    return { success: true, user: data };
 });
 
-// Deletar usuário (Apenas Admin)
+// Deletar usuário
 fastify.delete('/users/:id', async (request, reply) => {
-    const user = (request as any).user;
-    if (!ADMIN_EMAILS.includes(user.email)) {
+    const currentUser = (request as any).user;
+    if (currentUser.role !== 'admin') {
         return reply.status(403).send({ error: 'Acesso negado' });
     }
 
     const { id } = request.params as { id: string };
-    const { error } = await supabase.auth.admin.deleteUser(id);
+    const { error } = await supabase.from('dashboard_users').delete().eq('id', id);
     if (error) return reply.status(400).send({ error: error.message });
     return { success: true };
 });
