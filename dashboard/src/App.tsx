@@ -30,15 +30,16 @@ import { supabase } from './lib/supabase';
 import { User } from '@supabase/supabase-js';
 
 const getApiUrl = (): string => {
-    const { hostname } = window.location;
+    const { hostname, protocol } = window.location;
 
     // Se for localhost (desenvolvimento)
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
         return 'http://127.0.0.1:3001';
     }
 
-    // Em qualquer outro caso (produção), usa o domínio correto com HTTPS
-    return 'https://api.wattsapi.automatech.tech';
+    // Em produção, assume que a API está no mesmo domínio/subdomínio sob o path /api
+    // ou no subdomínio api. se configurado. Para máxima compatibilidade, usaremos path /api.
+    return `${protocol}//${hostname}/api`;
 };
 
 const API_URL = getApiUrl();
