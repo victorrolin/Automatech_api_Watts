@@ -6,6 +6,7 @@ import { MetricsManager } from './metrics.js';
 import dotenv from 'dotenv';
 import path from 'path';
 import QRCode from 'qrcode';
+import { supabase } from './supabase.js';
 
 dotenv.config();
 
@@ -29,6 +30,27 @@ fastify.register(fastifySocketIO as any, {
 });
 
 const manager = new InstanceManager();
+
+// Middleware de Autenticação Global
+fastify.addHook('preHandler', async (request, reply) => {
+    // Pular autenticação para o health check
+    if (request.url === '/health') return;
+
+    const authHeader = request.headers.authorization;
+    if (!authHeader) {
+        return reply.status(401).send({ error: 'Token não fornecido' });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+
+    if (error || !user) {
+        return reply.status(401).send({ error: 'Não autorizado ou token expirado' });
+    }
+
+    // Anexar usuário ao request se necessário (opcional)
+    (request as any).user = user;
+});
 
 // Health Check
 fastify.get('/health', async (request, reply) => {

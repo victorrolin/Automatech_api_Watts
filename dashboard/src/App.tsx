@@ -22,6 +22,8 @@ import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { io } from 'socket.io-client';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { supabase } from './lib/supabase';
+import { User } from '@supabase/supabase-js';
 
 const getApiUrl = (): string => {
     const { hostname } = window.location;
@@ -85,7 +87,14 @@ const translations = {
         avg_response: 'Avg Response',
         success_rate: 'Success Rate',
         messages_flow: 'Message Flow (Last 24h)',
-        bot_performance: 'Bot Performance'
+        bot_performance: 'Bot Performance',
+        login_title: 'Access Panel',
+        login_subtitle: 'Enter your credentials to manage your bots.',
+        email: 'Email',
+        password: 'Password',
+        login_btn: 'Sign In',
+        invalid_login: 'Invalid credentials',
+        logout: 'Sign Out'
     },
     pt: {
         instances: 'Instâncias',
@@ -133,7 +142,14 @@ const translations = {
         avg_response: 'Tempo Médio',
         success_rate: 'Taxa de Sucesso',
         messages_flow: 'Fluxo de Mensagens (24h)',
-        bot_performance: 'Desempenho do Bot'
+        bot_performance: 'Desempenho do Bot',
+        login_title: 'Acessar Painel',
+        login_subtitle: 'Digite suas credenciais para gerenciar seus bots.',
+        email: 'E-mail',
+        password: 'Senha',
+        login_btn: 'Entrar no Sistema',
+        invalid_login: 'Credenciais inválidas',
+        logout: 'Sair'
     }
 };
 
@@ -177,6 +193,12 @@ interface InstanceSettings {
 }
 
 function App() {
+    const [user, setUser] = useState<User | null>(null);
+    const [loginEmail, setLoginEmail] = useState('');
+    const [loginPassword, setLoginPassword] = useState('');
+    const [loginError, setLoginError] = useState('');
+    const [loading, setLoading] = useState(true);
+
     const [instances, setInstances] = useState<Instance[]>([]);
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [showNewModal, setShowNewModal] = useState(false);
@@ -200,7 +222,54 @@ function App() {
         localStorage.setItem('app_lang', next);
     };
 
+    // Supabase Auth Effect
     useEffect(() => {
+        // Check current session
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setUser(session?.user ?? null);
+            setLoading(false);
+
+            if (session) {
+                setupAxiosInterceptor(session.access_token);
+            }
+        });
+
+        // Listen for changes
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setUser(session?.user ?? null);
+            if (session) {
+                setupAxiosInterceptor(session.access_token);
+            }
+        });
+
+        return () => subscription.unsubscribe();
+    }, []);
+
+    const setupAxiosInterceptor = (token: string) => {
+        axios.interceptors.request.use((config) => {
+            config.headers.Authorization = `Bearer ${token}`;
+            return config;
+        });
+    };
+
+    const handleLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoginError('');
+        const { error } = await supabase.auth.signInWithPassword({
+            email: loginEmail,
+            password: loginPassword,
+        });
+        if (error) setLoginError(t.invalid_login);
+    };
+
+    const handleLogout = async () => {
+        await supabase.auth.signOut();
+        window.location.reload(); // Reset state
+    };
+
+    useEffect(() => {
+        if (!user) return;
+
         const socket = io(API_URL);
 
         socket.on('new_log', (log: LogEntry) => {
@@ -313,6 +382,88 @@ function App() {
         }
     };
 
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-[#0B0F13] flex items-center justify-center">
+                <div className="w-12 h-12 border-4 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin"></div>
+            </div>
+        );
+    }
+
+    if (!user) {
+        return (
+            <div className="min-h-screen bg-[#0B0F13] flex items-center justify-center p-6 relative overflow-hidden">
+                {/* Background Decor */}
+                <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-cyan-500/10 blur-[120px] rounded-full"></div>
+                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-500/10 blur-[120px] rounded-full"></div>
+
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="glass-panel p-10 w-full max-w-md shadow-2xl relative z-10 border-white/5"
+                >
+                    <div className="flex flex-col items-center mb-10">
+                        <div className="w-16 h-16 bg-gradient-to-tr from-[#00F5FF] to-[#8B5CF6] rounded-2xl flex items-center justify-center shadow-lg shadow-[#00F5FF]/20 mb-6 group cursor-pointer">
+                            <Zap className="text-black w-10 h-10 group-hover:scale-110 transition-transform" />
+                        </div>
+                        <h1 className="text-3xl font-black tracking-tight mb-2">Automatech</h1>
+                        <p className="text-slate-400 text-sm text-center">{t.login_subtitle}</p>
+                    </div>
+
+                    <form onSubmit={handleLogin} className="space-y-6">
+                        <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">
+                                {t.email}
+                            </label>
+                            <input
+                                type="email"
+                                required
+                                value={loginEmail}
+                                onChange={e => setLoginEmail(e.target.value)}
+                                className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm focus:border-cyan-500/50 outline-none transition-all placeholder:text-slate-600"
+                                placeholder="admin@automatech.tech"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">
+                                {t.password}
+                            </label>
+                            <input
+                                type="password"
+                                required
+                                value={loginPassword}
+                                onChange={e => setLoginPassword(e.target.value)}
+                                className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm focus:border-cyan-500/50 outline-none transition-all placeholder:text-slate-600"
+                                placeholder="••••••••"
+                            />
+                        </div>
+
+                        {loginError && (
+                            <motion.div
+                                initial={{ opacity: 0, x: -10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-3 rounded-lg text-xs font-semibold flex items-center gap-2"
+                            >
+                                <AlertCircle size={14} />
+                                {loginError}
+                            </motion.div>
+                        )}
+
+                        <button type="submit" className="w-full btn-premium justify-center py-4 text-sm font-bold mt-4">
+                            {t.login_btn}
+                        </button>
+                    </form>
+
+                    <div className="mt-8 flex justify-center gap-4">
+                        <button onClick={toggleLanguage} className="text-[10px] text-slate-500 hover:text-cyan-400 font-bold uppercase tracking-widest transition-colors cursor-pointer border-none bg-transparent">
+                            {language === 'pt' ? 'English' : 'Português'}
+                        </button>
+                    </div>
+                </motion.div>
+            </div>
+        );
+    }
+
     return (
         <div className="flex min-h-screen">
             {/* Sidebar Ultra-Premium */}
@@ -348,24 +499,31 @@ function App() {
                     </button>
                 </nav>
 
-                <div className="px-4 mb-4">
-                    <button
-                        onClick={toggleLanguage}
-                        className="w-full glass-panel py-2 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 hover:bg-white/5 cursor-pointer border-white/5"
-                    >
-                        <RefreshCw size={14} className={language === 'en' ? 'rotate-180' : ''} />
-                        {language === 'pt' ? 'English (EN)' : 'Português (PT)'}
-                    </button>
-                </div>
-
-                <div className="px-6 mb-8">
-                    <div className="glass-card p-4 rounded-2xl flex items-center gap-3 brightness-90">
-                        <div className="w-8 h-8 rounded-full bg-slate-700"></div>
-                        <div className="flex-1">
-                            <p className="text-xs font-semibold">Victor Rolin</p>
-                            <p className="text-[10px] text-slate-400">{t.admin_account}</p>
+                <div className="pt-6 border-t border-white/5 px-4 shrink-0">
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-cyan-500 to-purple-500 flex items-center justify-center text-[10px] font-bold">
+                            {user?.email?.[0].toUpperCase()}
                         </div>
-                        <LogOut size={14} className="text-slate-500 hover:text-white cursor-pointer" />
+                        <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold truncate">{user?.email}</p>
+                            <p className="text-[10px] text-slate-500">Administrator</p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={handleLogout}
+                        className="nav-link w-full border-none cursor-pointer text-rose-400 hover:bg-rose-500/10 hover:text-rose-400 transition-colors"
+                    >
+                        <LogOut size={20} />
+                        <span>{t.logout}</span>
+                    </button>
+                    <div className="mt-8 mb-4">
+                        <button
+                            onClick={toggleLanguage}
+                            className="w-full flex items-center justify-center gap-2 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-cyan-400 transition-colors cursor-pointer border border-white/5 rounded-lg bg-transparent"
+                        >
+                            <Layout size={12} />
+                            {language === 'pt' ? 'English' : 'Português'}
+                        </button>
                     </div>
                 </div>
             </aside>
