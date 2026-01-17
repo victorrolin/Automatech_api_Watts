@@ -13,7 +13,9 @@ import {
     LogOut,
     CheckCircle2,
     AlertCircle,
-    Zap
+    Zap,
+    Pause,
+    Play
 } from 'lucide-react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -72,7 +74,10 @@ const translations = {
         delete_confirm: 'Do you really want to delete instance {id}?',
         settings_saved: 'Settings saved!',
         save_error: 'Error saving',
-        create_error: 'Error creating instance'
+        create_error: 'Error creating instance',
+        paused: 'Paused',
+        resume: 'Resume Bot',
+        pause: 'Pause Bot'
     },
     pt: {
         instances: 'Instâncias',
@@ -111,7 +116,10 @@ const translations = {
         delete_confirm: 'Deseja realmente deletar a instância {id}?',
         settings_saved: 'Configurações salvas!',
         save_error: 'Erro ao salvar',
-        create_error: 'Erro ao criar instância'
+        create_error: 'Erro ao criar instância',
+        paused: 'Pausado',
+        resume: 'Retomar Bot',
+        pause: 'Pausar Bot'
     }
 };
 
@@ -119,6 +127,7 @@ interface Instance {
     id: string;
     status: 'connecting' | 'connected' | 'disconnected' | 'qr';
     hasQr: boolean;
+    isPaused?: boolean;
 }
 
 interface LogEntry {
@@ -137,6 +146,7 @@ interface InstanceSettings {
     typebotDelay?: number;
     typebotSessionTimeout?: number;
     enabled?: boolean;
+    isPaused?: boolean;
 }
 
 function App() {
@@ -231,7 +241,24 @@ function App() {
             fetchInstances();
             if (selectedInstance === id) setSelectedInstance(null);
         } catch (e) {
-            alert(t.create_error); // Reuse generic error or add delete_error
+            alert(t.create_error);
+        }
+    };
+
+    const togglePause = async (id: string, currentStatus: boolean) => {
+        try {
+            // Primeiro buscamos as settings atuais
+            const res = await axios.get(`${API_URL}/instances/${id}/settings`);
+            const currentSettings = res.data;
+
+            // Enviamos o update com o isPaused invertido
+            await axios.post(`${API_URL}/instances/${id}/settings`, {
+                ...currentSettings,
+                isPaused: !currentStatus
+            });
+            fetchInstances();
+        } catch (e) {
+            console.error('Erro ao alternar pausa');
         }
     };
 
@@ -345,8 +372,22 @@ function App() {
                                                 <p className="text-xs text-slate-500">{t.id_label}: {inst.id.toLowerCase()}</p>
                                             </div>
                                         </div>
-                                        <div className={`status-badge ${inst.status === 'connected' ? 'status-online' : 'status-offline'}`}>
-                                            {inst.status}
+                                        <div className="flex items-center gap-2">
+                                            {inst.status === 'connected' && (
+                                                <button
+                                                    onClick={() => togglePause(inst.id, inst.isPaused || false)}
+                                                    className={`p-2 rounded-lg transition-all cursor-pointer ${inst.isPaused
+                                                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                                            : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-400/20'
+                                                        }`}
+                                                    title={inst.isPaused ? t.resume : t.pause}
+                                                >
+                                                    {inst.isPaused ? <Play size={14} /> : <Pause size={14} />}
+                                                </button>
+                                            )}
+                                            <div className={`status-badge ${inst.isPaused ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : inst.status === 'connected' ? 'status-online' : 'status-offline'}`}>
+                                                {inst.isPaused ? t.paused : inst.status}
+                                            </div>
                                         </div>
                                     </div>
 
@@ -556,6 +597,17 @@ function App() {
                                                 >
                                                     {settings.enabled !== false ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
                                                     {settings.enabled !== false ? t.enabled : t.disabled}
+                                                </button>
+                                            </label>
+                                            <label className="flex-1">
+                                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Takeover (Pausa)</span>
+                                                <button
+                                                    onClick={() => setSettings({ ...settings, isPaused: !settings.isPaused })}
+                                                    className={`w-full h-[47px] rounded-xl flex items-center justify-center gap-2 border transition-all cursor-pointer ${!settings.isPaused ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                                        }`}
+                                                >
+                                                    {settings.isPaused ? <Play size={16} /> : <Pause size={16} />}
+                                                    {settings.isPaused ? t.resume : t.pause}
                                                 </button>
                                             </label>
                                         </div>

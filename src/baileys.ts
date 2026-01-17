@@ -64,6 +64,7 @@ export interface InstanceSettings {
     typebotDelay?: number;
     typebotSessionTimeout?: number; // Timeout em minutos (padrão: 30)
     enabled?: boolean;
+    isPaused?: boolean;
 }
 
 export class Instance {
@@ -225,6 +226,17 @@ export class Instance {
 
                     if (shouldProcess) {
                         if (!text) continue;
+
+                        // Verificar se está pausado (Human Takeover)
+                        if (this.settings.isPaused === true) {
+                            LogSystem.add({
+                                type: 'SYSTEM',
+                                level: 'INFO',
+                                instance: this.id,
+                                message: `⏸️ Automação PAUSADA para intervenção humana. Ignorando mensagem.`
+                            });
+                            continue;
+                        }
 
                         LogSystem.add({ type: 'WHATSAPP', level: 'INFO', instance: this.id, message: `📨 PROCESSAR: ${text}` });
                         console.log(`[Instance ${this.id}] Mensagem de ${from}: ${text}`);
