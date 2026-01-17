@@ -27,9 +27,18 @@ RUN npm ci --only=production --legacy-peer-deps
 # Copiar build
 COPY --from=api-builder /app/dist ./dist
 
-# Criar diretório de sessões
-RUN mkdir -p sessions
+# Criar diretório de sessões com permissões corretas
+RUN mkdir -p /app/sessions && \
+    chown -R node:node /app/sessions && \
+    chmod -R 755 /app/sessions
+
+# Garantir que o usuário node tenha permissão em /app
+RUN chown -R node:node /app
+
+# Mudar para usuário não-root
+USER node
 
 EXPOSE 3001
 
 CMD ["node", "dist/index.js"]
+
