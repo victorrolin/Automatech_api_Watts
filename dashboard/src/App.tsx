@@ -132,6 +132,8 @@ function App() {
     const [showNewModal, setShowNewModal] = useState(false);
     const [newInstanceId, setNewInstanceId] = useState('');
     const [selectedInstance, setSelectedInstance] = useState<string | null>(null);
+    const [showQrModal, setShowQrModal] = useState(false);
+    const [qrInstanceId, setQrInstanceId] = useState<string | null>(null);
     const [settings, setSettings] = useState<InstanceSettings>({});
     const [activeTab, setActiveTab] = useState<'instances' | 'logs' | 'automation'>('instances');
     const [language, setLanguage] = useState<'pt' | 'en'>(() => {
@@ -363,8 +365,8 @@ function App() {
                                         {inst.status === 'qr' && (
                                             <button
                                                 onClick={() => {
-                                                    setSelectedInstance(inst.id);
-                                                    setActiveTab('logs');
+                                                    setQrInstanceId(inst.id);
+                                                    setShowQrModal(true);
                                                 }}
                                                 className="w-full glass-panel py-2 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 bg-cyan-500/10 text-cyan-400 border-cyan-500/30 hover:bg-cyan-500/20 cursor-pointer mt-1"
                                             >
@@ -608,6 +610,65 @@ function App() {
                                             {t.cancel}
                                         </button>
                                     </div>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
+
+                {/* Modal de QR Code */}
+                <AnimatePresence>
+                    {showQrModal && qrInstanceId && (
+                        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-6">
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.9 }}
+                                className="glass-card p-8 rounded-3xl max-w-md w-full relative"
+                            >
+                                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500 to-purple-500"></div>
+                                <div className="w-20 h-20 bg-gradient-to-tr from-cyan-500 to-purple-500 rounded-3xl mx-auto mb-6 flex items-center justify-center shadow-2xl shadow-cyan-500/20">
+                                    <Zap className="text-black w-10 h-10" />
+                                </div>
+                                <h2 className="text-2xl font-bold mb-4 text-center">QR Code - {qrInstanceId}</h2>
+                                <p className="text-slate-400 mb-6 text-center text-sm">
+                                    Escaneie o QR Code abaixo com o WhatsApp para conectar a instância.
+                                </p>
+
+                                <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6">
+                                    <div className="bg-white p-4 rounded-xl mx-auto w-fit">
+                                        <img
+                                            src={`${API_URL}/instance/${qrInstanceId}/qr`}
+                                            alt="QR Code"
+                                            className="w-64 h-64"
+                                            onError={(e) => {
+                                                e.currentTarget.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="%23f1f5f9"/><text x="50%" y="50%" text-anchor="middle" dy=".3em" fill="%2364748b" font-family="sans-serif" font-size="14">QR Code não disponível</text></svg>';
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-4">
+                                    <button
+                                        onClick={() => {
+                                            // Recarregar QR Code
+                                            const img = document.querySelector(`img[src="${API_URL}/instance/${qrInstanceId}/qr"]`) as HTMLImageElement;
+                                            if (img) img.src = `${API_URL}/instance/${qrInstanceId}/qr?t=${Date.now()}`;
+                                        }}
+                                        className="flex-1 glass-panel py-3 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 hover:bg-white/5 cursor-pointer"
+                                    >
+                                        <RefreshCw size={16} />
+                                        Atualizar
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setShowQrModal(false);
+                                            setQrInstanceId(null);
+                                        }}
+                                        className="flex-1 px-8 rounded-xl border border-white/10 hover:bg-white/5 transition-all cursor-pointer"
+                                    >
+                                        Fechar
+                                    </button>
                                 </div>
                             </motion.div>
                         </div>
