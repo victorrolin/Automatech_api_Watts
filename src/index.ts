@@ -4,6 +4,7 @@ import fastifySocketIO from 'fastify-socket.io';
 import { InstanceManager, LogSystem } from './baileys.js';
 import dotenv from 'dotenv';
 import path from 'path';
+import QRCode from 'qrcode';
 
 dotenv.config();
 
@@ -77,7 +78,19 @@ fastify.get('/instances/:id/qr', async (request, reply) => {
     if (!instance) return reply.status(404).send({ error: 'Instância não encontrada' });
     if (!instance.qr) return reply.status(400).send({ error: 'QR Code não disponível ou já conectado' });
 
-    return { qr: instance.qr };
+    try {
+        // Gerar imagem PNG do QR Code
+        const qrImage = await QRCode.toBuffer(instance.qr, {
+            type: 'png',
+            width: 512,
+            margin: 2
+        });
+
+        reply.type('image/png');
+        return reply.send(qrImage);
+    } catch (error) {
+        return reply.status(500).send({ error: 'Erro ao gerar QR Code' });
+    }
 });
 
 // Deletar instância (Logout + Limpeza de Disco)
