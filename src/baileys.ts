@@ -11,6 +11,7 @@ import pino from 'pino';
 import path from 'path';
 import fs from 'fs';
 import axios from 'axios';
+import { MetricsManager } from './metrics.js';
 
 const logger = pino({ level: 'error' });
 
@@ -179,6 +180,13 @@ export class Instance {
                     const msgId = msg.key.id;
 
                     if (!from || !msgId) continue;
+
+                    if (isFromMe) {
+                        MetricsManager.trackSent(this.id);
+                        continue;
+                    }
+
+                    MetricsManager.trackReceived(this.id);
 
                     // Evitar processar a mesma mensagem duas vezes (cache de 1000 IDs)
                     if (this.processedMessages.has(msgId)) {
@@ -424,6 +432,7 @@ export class Instance {
             }
 
         } catch (e: any) {
+            MetricsManager.trackTypebot(this.id, false);
             const status = e.response?.status || 'ERR_CONN';
             const errorMsg = e.response?.data ? JSON.stringify(e.response.data) : e.message;
 

@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import fastifySocketIO from 'fastify-socket.io';
 import { InstanceManager, LogSystem } from './baileys.js';
+import { MetricsManager } from './metrics.js';
 import dotenv from 'dotenv';
 import path from 'path';
 import QRCode from 'qrcode';
@@ -150,6 +151,15 @@ fastify.post('/instances/:id/send', async (request, reply) => {
     } catch (error) {
         return reply.status(500).send({ error: 'Falha ao enviar mensagem' });
     }
+});
+
+fastify.get('/metrics', async (request, reply) => {
+    return reply.send(MetricsManager.getAll());
+});
+
+fastify.get('/instances/:id/metrics', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    return reply.send(MetricsManager.get(id));
 });
 
 const start = async () => {
