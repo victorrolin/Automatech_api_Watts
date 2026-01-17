@@ -327,7 +327,7 @@ function App() {
             clearInterval(interval);
             socket.disconnect();
         };
-    }, []);
+    }, [user]);
 
     useEffect(() => {
         if (selectedInstance) {

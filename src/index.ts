@@ -35,8 +35,9 @@ const ADMIN_EMAILS = ['victor@gmail.com', 'victorrolin@gmail.com']; // Lista de 
 
 // Middleware de Autenticação Global (Agora via Tabela dashboard_users)
 fastify.addHook('preHandler', async (request, reply) => {
-    // Pular autenticação para o health check e login
-    if (request.url === '/health' || request.url === '/login') return;
+    // Pular autenticação para o health check e login (mais robusto)
+    const url = request.url.toLowerCase();
+    if (url.includes('/health') || url.includes('/login')) return;
 
     const authHeader = request.headers.authorization;
     if (!authHeader) {
