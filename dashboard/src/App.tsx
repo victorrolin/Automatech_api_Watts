@@ -30,15 +30,15 @@ import { supabase } from './lib/supabase';
 import { User } from '@supabase/supabase-js';
 
 const getApiUrl = (): string => {
-    const { hostname, origin } = window.location;
+    const { hostname } = window.location;
 
     // Se for localhost (desenvolvimento)
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
         return 'http://127.0.0.1:3001';
     }
 
-    // Em produção, usa a rota relativa /api configurada no Nginx
-    return `${origin}/api`;
+    // Em produção, usa o subdomínio da API direto (como funcionava antes)
+    return 'https://api.wattsapi.automatech.tech';
 };
 
 const API_URL = getApiUrl();
