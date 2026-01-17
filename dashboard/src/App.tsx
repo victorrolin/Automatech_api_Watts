@@ -19,7 +19,31 @@ import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { io } from 'socket.io-client';
 
-const API_URL = 'http://127.0.0.1:3001';
+const getApiUrl = (): string => {
+    // 1. Prioridade para variável de ambiente fixada no build
+    if (typeof import.meta.env.VITE_API_URL === 'string' && import.meta.env.VITE_API_URL.length > 0) {
+        return import.meta.env.VITE_API_URL;
+    }
+
+    // 2. Detecção automática baseada no domínio atual
+    const { hostname, protocol } = window.location;
+
+    // Se for localhost (desenvolvimento)
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        return 'http://127.0.0.1:3001';
+    }
+
+    // Se estiver no domínio de produção
+    if (hostname.includes('automatech.tech')) {
+        return 'https://api.wattsapi.automatech.tech';
+    }
+
+    // Fallback generico (ex: ip direto)
+    return `${protocol}//api.${hostname}`;
+};
+
+const API_URL = getApiUrl();
+
 
 const translations = {
     en: {
