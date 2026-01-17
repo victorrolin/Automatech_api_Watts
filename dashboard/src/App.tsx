@@ -16,7 +16,11 @@ import {
     Zap,
     Pause,
     Play,
-    BarChart2
+    BarChart2,
+    Users,
+    UserPlus,
+    UserMinus,
+    ShieldAlert
 } from 'lucide-react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -94,7 +98,15 @@ const translations = {
         password: 'Password',
         login_btn: 'Sign In',
         invalid_login: 'Invalid credentials',
-        logout: 'Sign Out'
+        logout: 'Sign Out',
+        users_title: 'Users Management',
+        users_subtitle: 'Create and manage system operators.',
+        new_user: 'New User',
+        created_at: 'Created at',
+        last_login: 'Last login',
+        status: 'Status',
+        actions: 'Actions',
+        delete_user_confirm: 'Do you really want to delete this user?'
     },
     pt: {
         instances: 'Instâncias',
@@ -149,7 +161,15 @@ const translations = {
         password: 'Senha',
         login_btn: 'Entrar no Sistema',
         invalid_login: 'Credenciais inválidas',
-        logout: 'Sair'
+        logout: 'Sair',
+        users_title: 'Gestão de Usuários',
+        users_subtitle: 'Crie e gerencie os operadores do sistema.',
+        new_user: 'Novo Usuário',
+        created_at: 'Criado em',
+        last_login: 'Último acesso',
+        status: 'Status',
+        actions: 'Ações',
+        delete_user_confirm: 'Deseja realmente excluir este usuário?'
     }
 };
 
@@ -181,6 +201,14 @@ interface LogEntry {
     message: string;
 }
 
+interface UserIAM {
+    id: string;
+    email: string;
+    created_at: string;
+    last_sign_in_at: string;
+    banned_until?: string;
+}
+
 interface InstanceSettings {
     n8nUrl?: string;
     typebotUrl?: string;
@@ -207,8 +235,10 @@ function App() {
     const [showQrModal, setShowQrModal] = useState(false);
     const [qrInstanceId, setQrInstanceId] = useState<string | null>(null);
     const [settings, setSettings] = useState<InstanceSettings>({});
-    const [activeTab, setActiveTab] = useState<'instances' | 'logs' | 'automation'>('instances');
+    const [activeTab, setActiveTab] = useState<'instances' | 'logs' | 'automation' | 'users'>('instances');
     const [metrics, setMetrics] = useState<AllMetrics>({});
+    const [usersIAM, setUsersIAM] = useState<UserIAM[]>([]);
+    const [showUserModal, setShowUserModal] = useState(false);
     const [language, setLanguage] = useState<'pt' | 'en'>(() => {
         const saved = localStorage.getItem('app_lang');
         return (saved === 'pt' || saved === 'en') ? saved : 'pt';
@@ -279,10 +309,12 @@ function App() {
         fetchInstances();
         fetchLogs();
         fetchMetrics();
+        fetchUsers();
 
         const interval = setInterval(() => {
             fetchInstances();
             fetchMetrics();
+            if (activeTab === 'users') fetchUsers();
         }, 5000);
         return () => {
             clearInterval(interval);
@@ -320,6 +352,15 @@ function App() {
             setMetrics(res.data);
         } catch (e) {
             console.error('Erro ao buscar métricas');
+        }
+    };
+
+    const fetchUsers = async () => {
+        try {
+            const res = await axios.get(`${API_URL}/users`);
+            setUsersIAM(res.data);
+        } catch (e) {
+            console.error('Erro ao buscar usuários');
         }
     };
 
@@ -379,6 +420,40 @@ function App() {
             alert(t.settings_saved);
         } catch (e) {
             alert(t.save_error);
+        }
+    };
+
+    const deleteUserIAM = async (id: string) => {
+        if (!confirm(t.delete_user_confirm)) return;
+        try {
+            await axios.delete(`${API_URL}/users/${id}`);
+            fetchUsers();
+        } catch (e) {
+            alert('Erro ao excluir usuário');
+        }
+    };
+
+    const toggleBan = async (id: string, isBanned: boolean) => {
+        try {
+            await axios.patch(`${API_URL}/users/${id}`, {
+                ban_duration: isBanned ? 'none' : '876000h'
+            });
+            fetchUsers();
+        } catch (e) {
+            alert('Erro ao alterar status do usuário');
+        }
+    };
+
+    const handleCreateUser = async (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+            await axios.post(`${API_URL}/users`, { email: loginEmail, password: loginPassword });
+            setShowUserModal(false);
+            setLoginEmail('');
+            setLoginPassword('');
+            fetchUsers();
+        } catch (e) {
+            alert('Erro ao criar usuário');
         }
     };
 
@@ -497,6 +572,13 @@ function App() {
                         <Activity size={20} />
                         <span>{t.automation}</span>
                     </button>
+                    <button
+                        onClick={() => setActiveTab('users')}
+                        className={`nav-link w-full border-none cursor-pointer ${activeTab === 'users' ? 'active' : ''}`}
+                    >
+                        <Users size={20} />
+                        <span>Usuários</span>
+                    </button>
                 </nav>
 
                 <div className="pt-6 border-t border-white/5 px-4 shrink-0">
@@ -534,17 +616,28 @@ function App() {
                     <div>
                         <h1 className="text-3xl font-bold mb-2">
                             {activeTab === 'instances' ? t.connected_instances :
-                                activeTab === 'logs' ? t.terminal_activity : t.automation_hub}
+                                activeTab === 'logs' ? t.terminal_activity :
+                                    activeTab === 'users' ? t.users_title : t.automation_hub}
                         </h1>
-                        <p className="text-slate-400">{t.manage_infra}</p>
+                        <p className="text-slate-400">{activeTab === 'users' ? t.users_subtitle : t.manage_infra}</p>
                     </div>
-                    <button
-                        onClick={() => setShowNewModal(true)}
-                        className="btn-premium"
-                    >
-                        <Plus size={20} />
-                        <span>{t.new_instance}</span>
-                    </button>
+                    {activeTab === 'users' ? (
+                        <button
+                            onClick={() => setShowUserModal(true)}
+                            className="btn-premium"
+                        >
+                            <UserPlus size={20} />
+                            <span>{t.new_user}</span>
+                        </button>
+                    ) : (
+                        <button
+                            onClick={() => setShowNewModal(true)}
+                            className="btn-premium"
+                        >
+                            <Plus size={20} />
+                            <span>{t.new_instance}</span>
+                        </button>
+                    )}
                 </header>
 
                 <AnimatePresence mode="wait">
@@ -640,6 +733,62 @@ function App() {
                                     )}
                                 </motion.div>
                             ))}
+                        </motion.div>
+                    )}
+
+                    {activeTab === 'users' && (
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.98 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className="glass-panel rounded-3xl overflow-hidden border-white/5"
+                        >
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-white/5 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                                        <th className="px-6 py-4">{t.email}</th>
+                                        <th className="px-6 py-4">{t.created_at}</th>
+                                        <th className="px-6 py-4">{t.last_login}</th>
+                                        <th className="px-6 py-4">{t.status}</th>
+                                        <th className="px-6 py-4 text-right">{t.actions}</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="text-sm">
+                                    {usersIAM.map(u => (
+                                        <tr key={u.id} className="border-t border-white/5 hover:bg-white/[0.02] transition-colors">
+                                            <td className="px-6 py-4 font-semibold">{u.email}</td>
+                                            <td className="px-6 py-4 text-slate-400 text-xs">
+                                                {new Date(u.created_at).toLocaleDateString()}
+                                            </td>
+                                            <td className="px-6 py-4 text-slate-400 text-xs">
+                                                {u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleString() : '---'}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                {u.banned_until ? (
+                                                    <span className="bg-rose-500/10 text-rose-400 px-2 py-1 rounded text-[10px] font-bold uppercase">Banned</span>
+                                                ) : (
+                                                    <span className="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded text-[10px] font-bold uppercase">Active</span>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="flex justify-end gap-2">
+                                                    <button
+                                                        onClick={() => toggleBan(u.id, !!u.banned_until)}
+                                                        className={`p-2 rounded-lg transition-colors ${u.banned_until ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400 hover:bg-rose-500/20'}`}
+                                                    >
+                                                        {u.banned_until ? <ShieldAlert size={16} /> : <UserMinus size={16} />}
+                                                    </button>
+                                                    <button
+                                                        onClick={() => deleteUserIAM(u.id)}
+                                                        className="p-2 bg-white/5 text-slate-400 hover:bg-rose-500/20 hover:text-rose-400 rounded-lg transition-colors"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </motion.div>
                     )}
 
@@ -1036,8 +1185,77 @@ function App() {
                         </div>
                     )}
                 </AnimatePresence>
-            </main >
-        </div >
+
+                {/* Modal Novo Usuário */}
+                <AnimatePresence>
+                    {showUserModal && (
+                        <div className="fixed inset-0 z-[70] flex items-center justify-center p-6">
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                onClick={() => setShowUserModal(false)}
+                                className="absolute inset-0 bg-black/80 backdrop-blur-md"
+                            />
+                            <motion.div
+                                initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                                animate={{ scale: 1, opacity: 1, y: 0 }}
+                                exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                                className="glass-panel p-8 w-full max-w-md relative z-10 border-white/5"
+                            >
+                                <h2 className="text-2xl font-bold mb-2">{t.new_user}</h2>
+                                <p className="text-slate-400 text-sm mb-8">{t.users_subtitle}</p>
+
+                                <form onSubmit={handleCreateUser} className="space-y-6">
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 px-1">
+                                            {t.email}
+                                        </label>
+                                        <input
+                                            type="email"
+                                            required
+                                            value={loginEmail}
+                                            onChange={e => setLoginEmail(e.target.value)}
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm focus:border-cyan-500/50 outline-none transition-all"
+                                            placeholder="user@example.com"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 px-1">
+                                            {t.password}
+                                        </label>
+                                        <input
+                                            type="password"
+                                            required
+                                            value={loginPassword}
+                                            onChange={e => setLoginPassword(e.target.value)}
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm focus:border-cyan-500/50 outline-none transition-all"
+                                            placeholder="Mínimo 6 caracteres"
+                                        />
+                                    </div>
+
+                                    <div className="flex gap-4 mt-8">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowUserModal(false)}
+                                            className="flex-1 py-3 text-sm font-bold text-slate-400 hover:text-white transition-colors"
+                                        >
+                                            {t.cancel}
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            className="flex-[2] btn-premium justify-center py-3"
+                                        >
+                                            {t.new_user}
+                                        </button>
+                                    </div>
+                                </form>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
+            </main>
+        </div>
     );
 }
 

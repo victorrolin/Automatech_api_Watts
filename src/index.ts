@@ -184,6 +184,45 @@ fastify.get('/instances/:id/metrics', async (request, reply) => {
     return reply.send(MetricsManager.get(id));
 });
 
+// --- Rotas Administrativas de Usuários (IAM) ---
+
+// Listar todos os usuários
+fastify.get('/users', async (request, reply) => {
+    const { data, error } = await supabase.auth.admin.listUsers();
+    if (error) return reply.status(500).send({ error: error.message });
+    return data.users;
+});
+
+// Criar novo usuário
+fastify.post('/users', async (request, reply) => {
+    const { email, password } = request.body as any;
+    const { data, error } = await supabase.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true
+    });
+    if (error) return reply.status(400).send({ error: error.message });
+    return { success: true, user: data.user };
+});
+
+// Atualizar usuário (ex: trocar senha ou banir)
+fastify.patch('/users/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const updates = request.body as any;
+
+    const { data, error } = await supabase.auth.admin.updateUserById(id, updates);
+    if (error) return reply.status(400).send({ error: error.message });
+    return { success: true, user: data.user };
+});
+
+// Deletar usuário
+fastify.delete('/users/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { error } = await supabase.auth.admin.deleteUser(id);
+    if (error) return reply.status(400).send({ error: error.message });
+    return { success: true };
+});
+
 const start = async () => {
     try {
         await fastify.ready();
