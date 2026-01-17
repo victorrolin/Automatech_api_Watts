@@ -22,10 +22,23 @@ import { io } from 'socket.io-client';
 
 
 // Detectar automaticamente a URL da API
-const API_URL: string = import.meta.env.VITE_API_URL as string ||
-    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-        ? 'http://127.0.0.1:3001'
-        : `${window.location.protocol}//api.${window.location.hostname.replace('www.', '')}`);
+const getApiUrl = (): string => {
+    // Se houver variável de ambiente, usar ela
+    if (import.meta.env.VITE_API_URL) {
+        return import.meta.env.VITE_API_URL;
+    }
+
+    // Se for localhost, usar API local
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return 'http://127.0.0.1:3001';
+    }
+
+    // Em produção, construir URL baseada no domínio atual
+    const hostname = window.location.hostname.replace('www.', '');
+    return `${window.location.protocol}//api.${hostname}`;
+};
+
+const API_URL = getApiUrl();
 
 const translations = {
     en: {
