@@ -35,13 +35,16 @@ services:
         - traefik.http.routers.automatech-api-secure.tls=true
         - traefik.http.routers.automatech-api-secure.tls.certresolver=letsencryptresolver
         - traefik.http.routers.automatech-api-secure.service=automatech-api
+        - traefik.http.routers.automatech-api-secure.middlewares=automatech-cors
         
         # Service
         - traefik.http.services.automatech-api.loadbalancer.server.port=3001
         
         # CORS Middleware
-        - traefik.http.middlewares.automatech-cors.headers.accesscontrolallowmethods=GET,POST,DELETE,OPTIONS
-        - traefik.http.middlewares.automatech-cors.headers.accesscontrolalloworiginlist=*
+        - traefik.http.middlewares.automatech-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS
+        - traefik.http.middlewares.automatech-cors.headers.accesscontrolalloworiginlist=https://wattsapi.automatech.tech,http://localhost:5173
+        - traefik.http.middlewares.automatech-cors.headers.accesscontrolallowheaders=Content-Type,Authorization
+        - traefik.http.middlewares.automatech-cors.headers.accesscontrolallowcredentials=true
         - traefik.http.middlewares.automatech-cors.headers.accesscontrolmaxage=100
         - traefik.http.middlewares.automatech-cors.headers.addvaryheader=true
 
