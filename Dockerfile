@@ -38,7 +38,7 @@ RUN chown -R node:node /app
 # Mudar para usuário não-root
 USER node
 
-EXPOSE 3001
+EXPOSE 3003
 
 CMD ["node", "dist/index.js"]
 
