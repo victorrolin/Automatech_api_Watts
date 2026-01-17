@@ -7,7 +7,7 @@ export default defineConfig({
         port: 3002,
         host: true,
         strictPort: true,
-        allowedHosts: ['wattsapi.automatech.tech', 'localhost', '172.17.0.1'],
+        allowedHosts: true,
         hmr: {
             host: 'wattsapi.automatech.tech',
             protocol: 'wss'
