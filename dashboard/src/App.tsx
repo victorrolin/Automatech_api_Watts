@@ -540,9 +540,9 @@ function App() {
                                                 <input
                                                     type="number"
                                                     className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-sm focus:border-cyan-500/50 outline-none transition-all"
-                                                    value={settings.typebotSessionTimeout || 30}
+                                                    value={settings.typebotSessionTimeout || 2}
                                                     onChange={e => setSettings({ ...settings, typebotSessionTimeout: parseInt(e.target.value) })}
-                                                    placeholder="30"
+                                                    placeholder="2"
                                                 />
                                             </label>
                                         </div>

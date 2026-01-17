@@ -403,7 +403,7 @@ export class Instance {
     }
 
     private cleanExpiredSessions() {
-        const timeoutMinutes = this.settings.typebotSessionTimeout || 30; // Padrão: 30 minutos
+        const timeoutMinutes = this.settings.typebotSessionTimeout || 2; // Padrão: 2 minutos
         const timeoutMs = timeoutMinutes * 60 * 1000;
         const now = Date.now();
 
