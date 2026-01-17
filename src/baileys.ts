@@ -343,11 +343,14 @@ export class Instance {
             // Processar mensagens do Bot
             const processMessages = async (messages: any[]) => {
                 for (const botMsg of messages) {
-                    if (botMsg.type === 'text') {
-                        // Delay humano
-                        const delay = this.settings.typebotDelay || 1000;
-                        await new Promise(resolve => setTimeout(resolve, delay));
+                    const delay = this.settings.typebotDelay || 1500;
 
+                    // Ativar status de "digitando..."
+                    try {
+                        await this.sock?.sendPresenceUpdate('composing', remoteJid);
+                    } catch (e) { }
+
+                    if (botMsg.type === 'text') {
                         let messageText = '';
                         if (botMsg.content.richText) {
                             messageText = botMsg.content.richText.map((block: any) =>
@@ -358,9 +361,12 @@ export class Instance {
                         }
 
                         if (messageText) {
+                            // Delay proporcional ao texto (mínimo delay configurado)
+                            const typingTime = Math.max(delay, Math.min(messageText.length * 50, 5000));
+                            await new Promise(resolve => setTimeout(resolve, typingTime));
+
                             const sentMsg = await this.sock?.sendMessage(remoteJid, { text: messageText });
 
-                            // Importante: Adicionar ID da mensagem enviada pelo bot ao cache para evitar loops no autoteste
                             if (sentMsg?.key.id) {
                                 this.processedMessages.add(sentMsg.key.id);
                                 if (this.processedMessages.size > 1000) {
@@ -368,16 +374,14 @@ export class Instance {
                                     if (firstItem) this.processedMessages.delete(firstItem);
                                 }
                             }
-
                             LogSystem.add({ type: 'TYPEBOT', level: 'INFO', instance: this.id, message: `📤 Enviando resposta: "${messageText.substring(0, 30)}..."` });
                         }
                     } else if (botMsg.type === 'image' || botMsg.type === 'video') {
-                        // Delay humano
-                        const delay = this.settings.typebotDelay || 1000;
-                        await new Promise(resolve => setTimeout(resolve, delay));
-
                         const mediaUrl = botMsg.content?.url;
                         if (mediaUrl) {
+                            // Delay para mídia
+                            await new Promise(resolve => setTimeout(resolve, delay));
+
                             const isImage = botMsg.type === 'image';
                             const messageContent = isImage
                                 ? { image: { url: mediaUrl } }
@@ -392,10 +396,14 @@ export class Instance {
                                     if (firstItem) this.processedMessages.delete(firstItem);
                                 }
                             }
-
                             LogSystem.add({ type: 'TYPEBOT', level: 'INFO', instance: this.id, message: `📤 Enviando ${botMsg.type}: ${mediaUrl.substring(0, 50)}...` });
                         }
                     }
+
+                    // Parar status de "digitando..."
+                    try {
+                        await this.sock?.sendPresenceUpdate('paused', remoteJid);
+                    } catch (e) { }
                 }
             };
 
