@@ -372,8 +372,29 @@ export class Instance {
                             LogSystem.add({ type: 'TYPEBOT', level: 'INFO', instance: this.id, message: `📤 Enviando resposta: "${messageText.substring(0, 30)}..."` });
                         }
                     } else if (botMsg.type === 'image' || botMsg.type === 'video') {
-                        // Opcional: Implementar envio de mídia no futuro
-                        LogSystem.add({ type: 'TYPEBOT', level: 'WARN', instance: this.id, message: `Media type '${botMsg.type}' ignorado (não implementado)` });
+                        // Delay humano
+                        const delay = this.settings.typebotDelay || 1000;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+
+                        const mediaUrl = botMsg.content?.url;
+                        if (mediaUrl) {
+                            const isImage = botMsg.type === 'image';
+                            const messageContent = isImage
+                                ? { image: { url: mediaUrl } }
+                                : { video: { url: mediaUrl } };
+
+                            const sentMsg = await this.sock?.sendMessage(remoteJid, messageContent as any);
+
+                            if (sentMsg?.key.id) {
+                                this.processedMessages.add(sentMsg.key.id);
+                                if (this.processedMessages.size > 1000) {
+                                    const firstItem = this.processedMessages.values().next().value;
+                                    if (firstItem) this.processedMessages.delete(firstItem);
+                                }
+                            }
+
+                            LogSystem.add({ type: 'TYPEBOT', level: 'INFO', instance: this.id, message: `📤 Enviando ${botMsg.type}: ${mediaUrl.substring(0, 50)}...` });
+                        }
                     }
                 }
             };
