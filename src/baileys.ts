@@ -145,34 +145,31 @@ export class Instance {
                     const hasCredentials = fs.existsSync(credsPath);
 
                     if (!hasCredentials) {
-                        // Primeira conexão - aguardar QR code ser gerado
-                        // Só reconectar se já tentou várias vezes (timeout real)
+                        // Primeira conexão - recriar socket para gerar QR code
                         this.connectionAttempts++;
 
-                        if (this.connectionAttempts <= 3) {
-                            // Ainda aguardando QR - não fazer nada
-                            LogSystem.add({
-                                type: 'WHATSAPP',
-                                level: 'INFO',
-                                instance: this.id,
-                                message: `Aguardando leitura do QR Code... (${this.connectionAttempts}/3)`
-                            });
-                            this.status = 'qr';
-                            this.isInitializing = false;
-                            return; // Não reconectar - socket ainda ativo ou será recriado pelo Baileys
-                        } else {
-                            // Timeout - recriar socket
-                            LogSystem.add({
-                                type: 'WHATSAPP',
-                                level: 'WARN',
-                                instance: this.id,
-                                message: 'Timeout aguardando QR Code, recriando socket...'
-                            });
+                        // Delay progressivo: 3s, 5s, 10s, depois reinicia
+                        const delays = [3000, 5000, 10000];
+                        const delayIndex = Math.min(this.connectionAttempts - 1, delays.length - 1);
+                        const delay = delays[delayIndex] || 5000;
+
+                        LogSystem.add({
+                            type: 'WHATSAPP',
+                            level: 'INFO',
+                            instance: this.id,
+                            message: `Tentativa ${this.connectionAttempts} - Reconectando em ${delay / 1000}s para gerar QR Code...`
+                        });
+                        this.status = 'qr';
+                        this.isInitializing = false;
+
+                        // Reset após muitas tentativas
+                        if (this.connectionAttempts >= 5) {
                             this.connectionAttempts = 0;
-                            this.isInitializing = false;
-                            setTimeout(() => this.init(), 2000);
-                            return;
                         }
+
+                        // Sempre recriar socket para tentar gerar QR
+                        setTimeout(() => this.init(), delay);
+                        return;
                     }
 
                     this.qr = undefined;
