@@ -145,7 +145,11 @@ export class Instance {
                     const lastDisconnectError = (lastDisconnect?.error as Boom | undefined);
                     const shouldReconnect = lastDisconnectError?.output?.statusCode !== DisconnectReason.loggedOut;
 
-                    if (shouldReconnect) {
+                    // Verificar se tem credenciais salvas antes de tentar reconectar
+                    const credsPath = path.join(this.authPath, 'creds.json');
+                    const hasCredentials = fs.existsSync(credsPath);
+
+                    if (shouldReconnect && hasCredentials) {
                         this.connectionAttempts++;
                         const delay = Math.min(5000 * Math.pow(2, this.connectionAttempts - 1), 60000); // 5s, 10s, 20s, 40s, max 60s
                         LogSystem.add({
@@ -156,6 +160,17 @@ export class Instance {
                         });
                         this.isInitializing = false;
                         setTimeout(() => this.init(), delay);
+                    } else if (shouldReconnect && !hasCredentials) {
+                        // Sem credenciais - aguardar QR code em vez de tentar reconectar
+                        LogSystem.add({
+                            type: 'WHATSAPP',
+                            level: 'INFO',
+                            instance: this.id,
+                            message: 'Aguardando leitura do QR Code...'
+                        });
+                        this.isInitializing = false;
+                        this.connectionAttempts = 0;
+                        this.status = 'qr'; // Forçar status para "qr"
                     } else {
                         LogSystem.add({ type: 'WHATSAPP', level: 'INFO', instance: this.id, message: 'Deslogado. Limpando dados...' });
                         this.isInitializing = false;
