@@ -140,16 +140,47 @@ export class Instance {
                 }
 
                 if (connection === 'close') {
+                    // Verificar se tem credenciais salvas ANTES de tratar como desconexão
+                    const credsPath = path.join(this.authPath, 'creds.json');
+                    const hasCredentials = fs.existsSync(credsPath);
+
+                    if (!hasCredentials) {
+                        // Primeira conexão - aguardar QR code ser gerado
+                        // Só reconectar se já tentou várias vezes (timeout real)
+                        this.connectionAttempts++;
+
+                        if (this.connectionAttempts <= 3) {
+                            // Ainda aguardando QR - não fazer nada
+                            LogSystem.add({
+                                type: 'WHATSAPP',
+                                level: 'INFO',
+                                instance: this.id,
+                                message: `Aguardando leitura do QR Code... (${this.connectionAttempts}/3)`
+                            });
+                            this.status = 'qr';
+                            this.isInitializing = false;
+                            return; // Não reconectar - socket ainda ativo ou será recriado pelo Baileys
+                        } else {
+                            // Timeout - recriar socket
+                            LogSystem.add({
+                                type: 'WHATSAPP',
+                                level: 'WARN',
+                                instance: this.id,
+                                message: 'Timeout aguardando QR Code, recriando socket...'
+                            });
+                            this.connectionAttempts = 0;
+                            this.isInitializing = false;
+                            setTimeout(() => this.init(), 2000);
+                            return;
+                        }
+                    }
+
                     this.qr = undefined;
                     this.status = 'disconnected';
                     const lastDisconnectError = (lastDisconnect?.error as Boom | undefined);
                     const shouldReconnect = lastDisconnectError?.output?.statusCode !== DisconnectReason.loggedOut;
 
-                    // Verificar se tem credenciais salvas antes de tentar reconectar
-                    const credsPath = path.join(this.authPath, 'creds.json');
-                    const hasCredentials = fs.existsSync(credsPath);
-
-                    if (shouldReconnect && hasCredentials) {
+                    if (shouldReconnect) {
                         this.connectionAttempts++;
                         const delay = Math.min(5000 * Math.pow(2, this.connectionAttempts - 1), 60000); // 5s, 10s, 20s, 40s, max 60s
                         LogSystem.add({
@@ -160,17 +191,6 @@ export class Instance {
                         });
                         this.isInitializing = false;
                         setTimeout(() => this.init(), delay);
-                    } else if (shouldReconnect && !hasCredentials) {
-                        // Sem credenciais - aguardar QR code em vez de tentar reconectar
-                        LogSystem.add({
-                            type: 'WHATSAPP',
-                            level: 'INFO',
-                            instance: this.id,
-                            message: 'Aguardando leitura do QR Code...'
-                        });
-                        this.isInitializing = false;
-                        this.connectionAttempts = 0;
-                        this.status = 'qr'; // Forçar status para "qr"
                     } else {
                         LogSystem.add({ type: 'WHATSAPP', level: 'INFO', instance: this.id, message: 'Deslogado. Limpando dados...' });
                         this.isInitializing = false;
