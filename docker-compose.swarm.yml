@@ -9,7 +9,7 @@ services:
     networks:
       - typebotnet
     volumes:
-      - ./sessions:/app/sessions
+      - /var/www/Automatech_api_Watts/sessions:/app/sessions
     environment:
       - NODE_ENV=production
     deploy:
