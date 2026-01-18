@@ -133,6 +133,14 @@ export class Instance {
             this.sock.ev.on('connection.update', async (update: Partial<ConnectionState>) => {
                 const { connection, lastDisconnect, qr } = update;
 
+                // DEBUG: Log every connection.update event
+                LogSystem.add({
+                    type: 'WHATSAPP',
+                    level: 'INFO',
+                    instance: this.id,
+                    message: `[DEBUG] connection.update: connection=${connection}, qr=${qr ? 'PRESENTE' : 'undefined'}, keys=${Object.keys(update).join(',')}`
+                });
+
                 if (qr) {
                     this.qr = qr;
                     this.status = 'qr';
