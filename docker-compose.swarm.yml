@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  automatech-api:
+    image: automatech-api:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    networks:
+      - traefik-public
+      - automatech-network
+    volumes:
+      - ./sessions:/app/sessions
+    environment:
+      - NODE_ENV=production
+    deploy:
+      replicas: 1
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.automatech-api.rule=Host(`api.wattsapi.automatech.tech`)"
+        - "traefik.http.routers.automatech-api.entrypoints=websecure"
+        - "traefik.http.routers.automatech-api.tls.certresolver=letsencrypt"
+        - "traefik.http.services.automatech-api.loadbalancer.server.port=3003"
+        - "traefik.docker.network=traefik-public"
+
+  automatech-dashboard:
+    image: automatech-dashboard:latest
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    networks:
+      - traefik-public
+      - automatech-network
+    depends_on:
+      - automatech-api
+    deploy:
+      replicas: 1
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.automatech-dashboard.rule=Host(`wattsapi.automatech.tech`)"
+        - "traefik.http.routers.automatech-dashboard.entrypoints=websecure"
+        - "traefik.http.routers.automatech-dashboard.tls.certresolver=letsencrypt"
+        - "traefik.http.services.automatech-dashboard.loadbalancer.server.port=80"
+        - "traefik.docker.network=traefik-public"
+
+networks:
+  automatech-network:
+    driver: overlay
+  traefik-public:
+    external: true
+
+volumes:
+  sessions:
